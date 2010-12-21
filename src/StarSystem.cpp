@@ -20,6 +20,20 @@ static const fixed PLANET_MIN_SEPARATION = fixed(135,100);
 static const fixed AU_SOL_RADIUS = fixed(305,65536);
 static const fixed AU_EARTH_RADIUS = fixed(3, 65536);
 
+static const struct {
+	fixed meltingPoint;
+	fixed boilingPoint; // at 1 bar
+	fixed enthalpyVap;
+} s_chemStats[CHEM_MAX] = {
+	{ fixed(14,1), fixed(20,1), fixed(449,1) },
+	{ fixed(54,1), fixed(90,1), fixed(6820,1) },
+	{ fixed(63,1), fixed(77,1), fixed(2792,1) },
+	{ fixed(27315,100), fixed(37315,100), fixed(40657,1) },
+	{ fixed(195,1), fixed(216,1), fixed(15326,1) },
+	{ fixed(91,1), fixed(112,1), fixed(8180,1) },
+	{ fixed(195,1), fixed(240,1), fixed(23350,1) }
+};
+
 // indexed by enum type turd  
 float StarSystem::starColors[][3] = {
 	{ 0, 0, 0 }, // gravpoint
@@ -1012,6 +1026,148 @@ const SBody *SBody::FindStarAndTrueOrbitalRange(fixed &orbMin, fixed &orbMax)
 
 void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 {
+	///////////////////////
+	// OK, pick composition
+	///////////////////////
+	crustCarbon = rand.NFixed(2);
+	crustOxygen = rand.Fixed();
+	crustSilicon = rand.Fixed();
+	crustLightEarths = rand.Fixed();
+	crustLightTrans = rand.NFixed(2);
+	crustHeavyMetals = rand.NFixed(3);
+	{
+		fixed invTotal = fixed(1,1) / (crustCarbon + crustOxygen + crustSilicon +
+			crustLightEarths + crustLightTrans + crustHeavyMetals);
+		if (invTotal == 0) invTotal = fixed(1,1);
+		crustCarbon *= invTotal;
+		crustOxygen *= invTotal;
+		crustSilicon *= invTotal;
+		crustLightEarths *= invTotal;
+		crustLightTrans *= invTotal;
+		crustHeavyMetals *= invTotal;
+	}
+	printf("============\n");
+	printf("Crust: C %f, O %f, Si %f, Light Earths %f, Light Trans %f, Heavy metals %f\n",
+			crustCarbon.ToDouble(),
+			crustOxygen.ToDouble(),
+			crustSilicon.ToDouble(),
+			crustLightEarths.ToDouble(),
+			crustLightTrans.ToDouble(),
+			crustHeavyMetals.ToDouble());
+	// make terrible estimate of radius
+	radius = fixed::CubeRootOf(mass);
+
+	for (int i=0; i<CHEM_MAX; i++) {
+		m_gases[i] = m_liquids[i] = m_ices[i] = 0;
+	}
+
+	{
+		// inputs
+		fixed carbon = rand.NFixed(3);
+		m_gases[CHEM_H2] = rand.Fixed();
+		m_gases[CHEM_O2] = rand.Fixed();
+		m_gases[CHEM_N2] = rand.Fixed();
+		// 'react' them...
+#define REACT(outProduct, amount_a, molarMass_a, amount_b, molarMass_b) { \
+		outProduct = MIN(fixed(molarMass_a + molarMass_b, molarMass_a) * amount_a, \
+				 fixed(molarMass_a + molarMass_b, molarMass_b) * amount_b); \
+		amount_a -= fixed(molarMass_a, molarMass_a + molarMass_b) * outProduct; \
+		amount_b -= fixed(molarMass_b, molarMass_a + molarMass_b) * outProduct; }
+
+		// my chemistry is a bit rusty, but perhaps this is the right order
+		// for things to react....
+		REACT(m_gases[CHEM_H2O], m_gases[CHEM_O2], 16, m_gases[CHEM_H2], 2);
+		REACT(m_gases[CHEM_CO2], m_gases[CHEM_O2], 32, carbon, 12);
+		REACT(m_gases[CHEM_CH4], carbon, 12, m_gases[CHEM_H2], 4);
+		REACT(m_gases[CHEM_NH3], m_gases[CHEM_N2], 14, m_gases[CHEM_H2], 3);
+
+		// this equation is kosher. It is newton's gravity over the surface area:
+		// pressure = planet_mass * atmosphere_mass / (radius^4)
+		// pressure in earth atmospheres,
+		// planet_mass in earth masses,
+		// atmosphere_mass in earth atmosphere masses
+		// radius in earth radii
+		fixed minDistToStar, maxDistToStar, averageDistToStar;
+		const SBody *star = FindStarAndTrueOrbitalRange(minDistToStar, maxDistToStar);
+		averageDistToStar = (minDistToStar+maxDistToStar)>>1;
+		printf("Dist to star %.3fAU, star temperature: %dK\n", averageDistToStar.ToDouble(), star->averageTemp);
+
+		for (int iteration=0; iteration<100; iteration++) {
+			// OK, so when you condense the atmosphere out the pressure falls and
+			// boiling points change, so it must be done in iterations
+			fixed m = fixed(1,50); 
+			fixed atmosphereMass = fixed(0);
+			for (int i=0; i<CHEM_MAX; i++) atmosphereMass += m_gases[i];
+			m_surfacePressure = (mass * atmosphereMass) / (radius*radius*radius*radius);
+
+			fixed albedo = fixed(14,100);
+			// H2O changes albedo by cloud formation
+			albedo += fixed::SqrtOf(m_gases[CHEM_H2O]);
+			// all ices raise albedo
+			for (int i=0; i<CHEM_MAX; i++) { albedo += m_ices[i]; }
+			// squish range in a highly dubious made up way...
+			albedo = albedo / (fixed(1,1) + albedo);
+
+			// so calculating the global warming factor is sortof black magic and fraud.
+			// It uses some crude weightings and a surface area distribution
+			// and a rather suspect compressing function to ensure 0.0-1.0 range.
+			fixed globalwarming = (m_gases[CHEM_CO2] +
+				              fixed(228,10)*m_gases[CHEM_CH4] +
+					      fixed(7,1000)*m_gases[CHEM_H2O]) / (radius*radius);
+			globalwarming = fixed::SqrtOf(globalwarming) / (fixed(2,100) + fixed::SqrtOf(globalwarming));
+			printf("Global warming: %f, albedo: %f, surface atmospheric pressure %f\n", globalwarming.ToDouble(),
+					albedo.ToDouble(), m_surfacePressure.ToDouble());
+
+			averageTemp = CalcSurfaceTemp(star, averageDistToStar, albedo, globalwarming);
+			printf("Average surface temp %dK, pressure %f bar\n", averageTemp, m_surfacePressure.ToDouble());
+			printf("State	H2	O2	N2	H2O	CO2	CH4	NH3");
+			printf("\nGas");
+			for (int i=0; i<CHEM_MAX; i++) { printf("\t%.3f", m_gases[i].ToDouble()); }
+			printf("\nLiquid");
+			for (int i=0; i<CHEM_MAX; i++) { printf("\t%.3f", m_liquids[i].ToDouble()); }
+			printf("\nIces");
+			for (int i=0; i<CHEM_MAX; i++) { printf("\t%.3f", m_ices[i].ToDouble()); }
+			printf("\n");
+			//printf("Stage %.3f, surface pressure %f atmospheres, temp %dK\n", m.ToDouble(), m_surfacePressure.ToDouble(), averageTemp);
+			for (int i=0; i<CHEM_MAX; i++) {
+				if (s_chemStats[i].meltingPoint > fixed(averageTemp,1)) {
+					// move to ices state
+					m_ices[i] += m * (m_gases[i] + m_liquids[i]);
+					m_gases[i] -= m * m_gases[i];
+					m_liquids[i] -= m * m_liquids[i];
+				} else {
+					fixed boilingPoint = fixed(1,1) / (fixed::Log(fixed(1,1)/MAX(fixed(1,100),m_surfacePressure)) * 
+						(fixed(8314,1000) / s_chemStats[i].enthalpyVap) +
+						(fixed(1,1)/s_chemStats[i].boilingPoint));
+					//printf("%d boils at %f K on this joint\n", i, boilingPoint.ToDouble());
+					if (boilingPoint > fixed(averageTemp,1)) {
+						// move to liquids state
+						m_liquids[i] += m * (m_gases[i] + m_ices[i]);
+						m_gases[i] -= m * m_gases[i];
+						m_ices[i] -= m * m_ices[i];
+					} else {
+						// move to gases state
+						m_gases[i] += m * (m_liquids[i] + m_ices[i]);
+						m_liquids[i] -= m * m_liquids[i];
+						m_ices[i] -= m * m_ices[i];
+					}
+
+				}
+			}
+		}
+			printf("Average surface temp %dK, pressure %f bar\n", averageTemp, m_surfacePressure.ToDouble());
+			printf("State	H2	O2	N2	H2O	CO2	CH4	NH3");
+			printf("\nGas");
+			for (int i=0; i<CHEM_MAX; i++) { printf("\t%.3f", m_gases[i].ToDouble()); }
+			printf("\nLiquid");
+			for (int i=0; i<CHEM_MAX; i++) { printf("\t%.3f", m_liquids[i].ToDouble()); }
+			printf("\nIces");
+			for (int i=0; i<CHEM_MAX; i++) { printf("\t%.3f", m_ices[i].ToDouble()); }
+			printf("\n");
+	}
+
+	////////////////////////
+
 	fixed albedo = rand.Fixed() * fixed(1,2);
 	fixed globalwarming = rand.Fixed() * fixed(9,10);
 	// light planets have bugger all atmosphere
@@ -1153,7 +1309,7 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 		// kind of crappy
 		if ((mass > fixed(8,10)) && (!rand.Int32(0,15))) type = SBody::TYPE_PLANET_HIGHLY_VOLCANIC;
 	}
-	radius = fixed(bodyTypeInfo[type].radius, 100);
+	//radius = fixed(bodyTypeInfo[type].radius, 100);
 }
 
 void StarSystem::MakeShortDescription(MTRand &rand)

@@ -51,6 +51,7 @@ public:
 
 	friend fixedf operator+(const fixedf a, const fixedf b) { return fixedf(a.v+b.v); }
 	friend fixedf operator-(const fixedf a, const fixedf b) { return fixedf(a.v-b.v); }
+	friend fixedf operator-(const fixedf a) { return fixedf(-a.v); }
 	friend fixedf operator*(const fixedf a, const fixedf b) {
 		// 64*64 = (128bit>>FRAC) & ((1<<64)-1) 
 		//return fixedf(a.v*b.v >> FRAC);
@@ -164,6 +165,45 @@ public:
 		} while (count-- != 0);
 
 		return(fixedf(root));
+	}
+	static fixedf Exp(fixedf a) {
+		assert(a < fixedf(4,1)); // goes wanky above this...
+		fixedf p = a;
+		fixedf r = 1 + a;
+		p = p*a;
+		r += p / fixedf(2,1);
+		p = p*a;
+		r += p / fixedf(6,1);
+		p = p*a;
+		r += p / fixedf(24,1);
+		p = p*a;
+		r += p / fixedf(120,1);
+		p = p*a;
+		r += p / fixedf(720,1);
+		p = p*a;
+		r += p / fixedf(5040,1);
+		p = p*a;
+		r += p / fixedf(40320,1);
+		return r;
+	}
+
+	/** This gives excellent results for a >= 1.0, and pretty crap ones for 0 < a < 1.0. */
+	static fixedf Log(fixedf a) {
+		fixedf r = fixedf(0);
+		// log(x * 2**n) = log(x) + log(2**n), so lets get rid of those 2**ns
+		while (a >= fixedf(2,1)) {
+			a.v >>= 1;
+			r += fixedf(69314718,100000000); // log(2)
+		}
+		// and not very accurate
+		a = fixedf(1,1) - a;
+		fixedf px = a;
+		r -= a;
+		for (int i=2; i<16; i++) {
+			px = px*a;
+			r -= px*fixedf(1,i);
+		}
+		return r;
 	}
 
 	static fixedf CubeRootOf(fixedf a) {

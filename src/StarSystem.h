@@ -21,6 +21,12 @@ enum {  ECON_MINING = (1<<0),
 	ECON_AGRICULTURE = (1<<1), 
 	ECON_INDUSTRY = (1<<2) };	
 
+// Volatile
+enum Chem {
+	CHEM_H2, CHEM_O2, CHEM_N2, CHEM_H2O, CHEM_CO2, CHEM_CH4, CHEM_NH3, CHEM_MAX
+};
+
+
 class StarSystem;
 
 struct Orbit {
@@ -179,6 +185,24 @@ public:
 	fixed axialTilt; // in radians
 	int averageTemp;
 	BodyType type;
+
+	/* planet composition */
+	fixed crustCarbon;
+	fixed crustOxygen;
+	fixed crustSilicon;
+	fixed crustSulphur;
+	fixed crustLightEarths; // group1, group2 and Aluminium
+	fixed crustLightTrans; // Scandium to Zinc
+	fixed crustHeavyMetals;
+	/* can be solid, liquid or gas depending on temperature */
+	fixed m_gases[CHEM_MAX];
+	fixed m_liquids[CHEM_MAX];
+	fixed m_ices[CHEM_MAX];
+	/* other attributes */
+	//fixed volcanicity;
+
+	/* Calculated from the above stats */
+	fixed m_surfacePressure;
 	
 	/* economy type stuff */
 	fixed m_population;

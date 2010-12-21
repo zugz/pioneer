@@ -1013,7 +1013,7 @@ void WorldView::DrawHUD(const Frame *cam_frame)
 			float pressure, density;
 			((Planet*)astro)->GetAtmosphericState(dist, pressure, density);
 			char buf[128];
-			snprintf(buf, sizeof(buf), "Pressure: %.2f atmos", pressure);
+			snprintf(buf, sizeof(buf), "Pressure: %.2f Bar", pressure);
 			glPushMatrix();
 			glTranslatef(600, Gui::Screen::GetHeight()-2.0*Gui::Screen::GetFontHeight()-66, 0);
 			Gui::Screen::RenderString(buf);
