@@ -24,14 +24,32 @@ static const struct {
 	fixed meltingPoint;
 	fixed boilingPoint; // at 1 bar
 	fixed enthalpyVap;
+	fixed irAbsorption[40]; // 2 micrometer wide bands centred on 1um, 3um, 5um, ..., 39um
 } s_chemStats[CHEM_MAX] = {
+	/* H2 */
 	{ fixed(14,1), fixed(20,1), fixed(449,1) },
-	{ fixed(54,1), fixed(90,1), fixed(6820,1) },
+	/* O2 */
+	{ fixed(54,1), fixed(90,1), fixed(6820,1), // IR absorption actually for ozone
+          { fixed(0), fixed(10,100), fixed(7,100), fixed(0), fixed(10,100), fixed(0), fixed(0), fixed(0), fixed(0),
+	    fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0) } },
+	/* N2 */
 	{ fixed(63,1), fixed(77,1), fixed(2792,1) },
-	{ fixed(27315,100), fixed(37315,100), fixed(40657,1) },
-	{ fixed(195,1), fixed(216,1), fixed(15326,1) },
-	{ fixed(91,1), fixed(112,1), fixed(8180,1) },
-	{ fixed(195,1), fixed(240,1), fixed(23350,1) }
+	/* H2O */
+	{ fixed(27315,100), fixed(37315,100), fixed(40657,1),
+          { fixed(5,100), fixed(10,100), fixed(30,100), fixed(80,100), fixed(5,100), fixed(0), fixed(0), fixed(0), fixed(20,100),
+	    fixed(25,100), fixed(40,100), fixed(50,100), fixed(60,100), fixed(85,100), fixed(99,100), fixed(99,100), fixed(99,100), fixed(99,100), fixed(99,100), fixed(99,100) } },
+	/* CO2 */
+	{ fixed(195,1), fixed(216,1), fixed(15326,1),
+          { fixed(0), fixed(15,100), fixed(15,100), fixed(0), fixed(0), fixed(0), fixed(15,100), fixed(99,100), fixed(20,100),
+	    fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0) } },
+	/* CH4 */
+	{ fixed(91,1), fixed(112,1), fixed(8180,1),
+          { fixed(0), fixed(10,100), fixed(0), fixed(15,100), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0),
+	    fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0) } },
+	/* NH3 */
+	{ fixed(195,1), fixed(240,1), fixed(23350,1),
+
+	}
 };
 
 // indexed by enum type turd  
@@ -1024,6 +1042,29 @@ const SBody *SBody::FindStarAndTrueOrbitalRange(fixed &orbMin, fixed &orbMax)
 	return star;
 }
 
+fixed SBody::CalcGlobalWarming() const
+{
+	// emission by planet
+	sfloat irEmission[40];
+	// planck blackbody radiation formula:
+	// I(l) = (2*h*c**2) / (l**5 * (e**((hc)/(lkT)) - 1))
+	// Which without constants is:
+	// I(l) = 1 / (l**5 * (e**(1/(lT))-1))
+	// I(l) = power, l = wavelength, T = temp (kelvin)
+	// l = 0.000069 corresponds to 1um
+	const sfloat oneMicron = sfloat(69,1000000);
+	const sfloat T = sfloat(averageTemp,1);
+	T.Print();
+
+	printf("Temperature: %f K (%d)\n", T.ToDouble(), averageTemp);
+	for (int i=0; i<40; i++) {
+		const sfloat l = sfloat(i+1,1) * oneMicron;
+		irEmission[i] = sfloat(1,1) / (l*l*l*l*l * (sfloat::Exp(sfloat(1,1) / (l*T)) - sfloat(1,1)));
+		printf("%.0f um emission: %e\n", (double)(i+1), irEmission[i].ToDouble());
+	}
+	exit(0);
+}
+
 void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 {
 	///////////////////////
@@ -1108,13 +1149,15 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 			// squish range in a highly dubious made up way...
 			albedo = albedo / (fixed(1,1) + albedo);
 
+			averageTemp = CalcSurfaceTemp(star, averageDistToStar, albedo, fixed(0));
 			// so calculating the global warming factor is sortof black magic and fraud.
 			// It uses some crude weightings and a surface area distribution
 			// and a rather suspect compressing function to ensure 0.0-1.0 range.
-			fixed globalwarming = (m_gases[CHEM_CO2] +
-				              fixed(228,10)*m_gases[CHEM_CH4] +
-					      fixed(7,1000)*m_gases[CHEM_H2O]) / (radius*radius);
-			globalwarming = fixed::SqrtOf(globalwarming) / (fixed(2,100) + fixed::SqrtOf(globalwarming));
+			fixed globalwarming = this->CalcGlobalWarming();
+				//(m_gases[CHEM_CO2] +
+				  //            fixed(228,10)*m_gases[CHEM_CH4] +
+		//			      fixed(7,1000)*m_gases[CHEM_H2O]) / (radius*radius);
+		//	globalwarming = fixed::SqrtOf(globalwarming) / (fixed(2,100) + fixed::SqrtOf(globalwarming));
 			printf("Global warming: %f, albedo: %f, surface atmospheric pressure %f\n", globalwarming.ToDouble(),
 					albedo.ToDouble(), m_surfacePressure.ToDouble());
 

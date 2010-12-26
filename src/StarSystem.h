@@ -212,6 +212,7 @@ public:
 	const char *heightMapFilename;
 
 private:
+	fixed CalcGlobalWarming() const;
 };
 
 class StarSystem {

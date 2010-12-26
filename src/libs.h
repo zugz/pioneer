@@ -35,6 +35,7 @@
 #define snprintf _snprintf
 #endif
 
+#include "sfloat.h"
 #include "fixed.h"
 #include "vector3.h"
 #include "Aabb.h"

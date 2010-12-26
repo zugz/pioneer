@@ -167,23 +167,41 @@ public:
 		return(fixedf(root));
 	}
 	static fixedf Exp(fixedf a) {
-		assert(a < fixedf(4,1)); // goes wanky above this...
-		fixedf p = a;
-		fixedf r = 1 + a;
-		p = p*a;
+		assert(a <= fixedf(214,10)); // overflows above this
+		// find the exp of < 1.0 component
+		const fixedf aFrac = fixedf(a.v & MASK);
+		fixedf p = aFrac;
+		fixedf r = fixedf(1,1) + aFrac;
+		p *= aFrac;
 		r += p / fixedf(2,1);
-		p = p*a;
+		p *= aFrac;
 		r += p / fixedf(6,1);
-		p = p*a;
+		p *= aFrac;
 		r += p / fixedf(24,1);
-		p = p*a;
+		p *= aFrac;
 		r += p / fixedf(120,1);
-		p = p*a;
+		p *= aFrac;
 		r += p / fixedf(720,1);
-		p = p*a;
+		p *= aFrac;
 		r += p / fixedf(5040,1);
-		p = p*a;
+		p *= aFrac;
 		r += p / fixedf(40320,1);
+		// pre-calculated exp for power of two bits
+		if (a.v & (1LL<<(FRAC))) { // exp(1)
+			r *= fixedf(11674931554LL>>(32-FRAC));
+		}
+		if (a.v & (1LL<<(FRAC+1))) { // exp(2)
+			r *= fixedf(31735754293LL>>(32-FRAC));
+		}
+		if (a.v & (1LL<<(FRAC+2))) { // exp(4)
+			r *= fixedf(234497268814LL>>(32-FRAC));
+		}
+		if (a.v & (1LL<<(FRAC+3))) { // exp(8)
+			r *= fixedf(12803117065094LL>>(32-FRAC));
+		}
+		if (a.v & (1LL<<(FRAC+4))) { // exp(16)
+			r *= fixedf(38165554074222848LL>>(32-FRAC));
+		}
 		return r;
 	}
 
