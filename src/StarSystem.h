@@ -156,7 +156,7 @@ public:
 	}
 	fixed GetMassInEarths() const {
 		if (GetSuperType() <= SUPERTYPE_STAR)
-			return mass * 332998;
+			return mass * sfloat(332998,0,false);
 		else
 			return mass;
 	}

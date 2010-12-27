@@ -36,7 +36,6 @@
 #endif
 
 #include "sfloat.h"
-#include "fixed.h"
 #include "vector3.h"
 #include "Aabb.h"
 #include "matrix4x4.h"

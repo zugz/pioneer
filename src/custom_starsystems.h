@@ -2,7 +2,6 @@
 #define _CUSTOM_STARSYSTEMS_H
 
 #include "StarSystem.h"
-#include "fixed.h"
 #include "Polit.h"
 
 struct CustomSBody {

@@ -3,7 +3,6 @@
 
 #include <SDL_stdinc.h>
 #include <math.h>
-#include "fixed.h"
 
 class sfloat {
 public:
@@ -18,19 +17,6 @@ public:
 		TYPE_NAN
 	};
 
-	sfloat(fixed f) {
-		sign = (f.v < 0 ? 1 : 0);
-		f.v = abs(f.v);
-		e = -32;
-		while (f.v >= (1LL<<32)) {
-			f.v >>= 1;
-			e++;
-		}
-		m = f.v;
-		type = TYPE_NUMBER;
-		Normalize();
-	}
-
 	/** As fraction */
 	sfloat(Uint64 numerator, Uint64 denominator) {
 		Uint64 mantissa = (numerator<<32) / denominator;
@@ -42,6 +28,7 @@ public:
 		}
 		m = mantissa;
 		type = TYPE_NUMBER;
+		Normalize();
 	}
 
 	/** Native */
@@ -50,6 +37,13 @@ public:
 		this->e = e;
 		this->sign = sign ? 1 : 0;
 		this->type = type;
+		Normalize();
+	}
+	sfloat(int m) {
+		this->m = abs(m);
+		this->e = 0;
+		this->sign = (m>>31)&1;
+		this->type = TYPE_NUMBER;
 		Normalize();
 	}
 	sfloat() {
@@ -61,6 +55,7 @@ public:
 		b.Normalize();
 		return ((a.type == b.type) && (a.m==b.m) && (a.e==b.e) && (a.sign==b.sign));
 	}
+	friend bool operator!=(sfloat a, sfloat b) { return !(a == b); }
 	friend bool operator<(sfloat a, sfloat b) { return b>a; }
 	friend bool operator>(sfloat a, sfloat b) {
 		if (a == b) return false;
@@ -73,6 +68,7 @@ public:
 		if (a.sign) {
 			if (!b.sign) return false;
 			if (a.m == 0) return true;
+			if (b.m == 0) return false;
 			if (a.e > b.e) return false;
 			if (a.e == b.e) {
 				if (a.m > b.m) return false;
@@ -81,6 +77,7 @@ public:
 		} else {
 			if (b.sign) return true;
 			if (a.m == 0) return false;
+			if (b.m == 0) return true;
 			if (a.e > b.e) return true;
 			if (a.e == b.e) {
 				if (a.m > b.m) return true;
@@ -162,28 +159,32 @@ public:
 	}
 	void Print() const {
 		//printf("DEBUG: %.15e (%s %u x2^ %hd)\n", ToDouble(), (sign ? "- " : "+ "), m, e);
-		printf("sfloat(%uU,%hd,false),\n", m, e);
+		printf("sfloat(%uU,%hd,%s), // %e\n", m, e, sign ? "true" : "false", ToDouble());
 	}
 	friend sfloat operator+(sfloat a, sfloat b) {
 		b.sign = !b.sign;
 		return (a - b);
 	}
-	sfloat &operator-=(sfloat b) {
-		*this = (*this) - b;
-		return *this;
-	}	
-	sfloat &operator+=(sfloat b) {
-		*this = (*this) + b;
-		return *this;
-	}	
-	sfloat &operator*=(sfloat b) {
-		*this = (*this) * b;
-		return *this;
-	}	
-	sfloat &operator/=(sfloat b) {
-		*this = (*this) / b;
-		return *this;
-	}	
+	friend sfloat operator+(sfloat a, int b) {
+		return a + sfloat(abs(b), 0, (b>>31)&1);
+	}
+	friend sfloat operator-(sfloat a, int b) {
+		return a - sfloat(abs(b), 0, (b>>31)&1);
+	}
+	friend sfloat operator*(sfloat a, int b) {
+		return a * sfloat(abs(b), 0, (b>>31)&1);
+	}
+	friend sfloat operator+(int a, sfloat b) { return b+a; }
+	friend sfloat operator-(int a, sfloat b) { return b-a; }
+	friend sfloat operator*(int a, sfloat b) { return b*a; }
+	sfloat &operator+=(int b) { *this = (*this) + b; return *this; }
+	sfloat &operator-=(int b) { *this = (*this) - b; return *this; }
+	sfloat &operator*=(int b) { *this = (*this) * b; return *this; }
+	sfloat &operator-=(sfloat b) { *this = (*this) - b; return *this; }	
+	sfloat &operator+=(sfloat b) { *this = (*this) + b; return *this; }	
+	sfloat &operator*=(sfloat b) { *this = (*this) * b; return *this; }	
+	sfloat &operator/=(sfloat b) { *this = (*this) / b; return *this; }	
+
 	friend sfloat operator-(sfloat a, sfloat b) {
 		if ((a.type == TYPE_NAN) || (b.type == TYPE_NAN)) {
 			return sfloat(0,0,false,TYPE_NAN);
@@ -254,7 +255,7 @@ public:
 	static sfloat Sqrt(sfloat a) {
 		return Pow(a, sfloat(1,-1, false));
 	}
-	static sfloat Cuberoot(sfloat a) {
+	static sfloat CubeRoot(sfloat a) {
 		return Pow(a, oneThird);
 	}
 	sfloat Abs() const {
@@ -269,5 +270,6 @@ private:
 	static const sfloat exp_negpow2[10];
 };
 
+typedef sfloat fixed;
 
 #endif /* SFLOAT_H */

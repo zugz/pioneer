@@ -45,7 +45,7 @@
 #ifndef MTRAND_H
 #define MTRAND_H
 
-#include "fixed.h"
+#include "sfloat.h"
 #include <assert.h>
 
 class MTRand_int32 { // Mersenne Twister random number generator
@@ -127,12 +127,11 @@ public:
       static_cast<double>(rand_int32() >> 6)) * (1. / 9007199254740992.);
   }
   // [0,1)
-  fixed Fixed() {
-	  assert(fixed::FRAC == 32);
-	  return fixed(rand_int32());
+  sfloat Fixed() {
+	  return sfloat(rand_int32(), -32, false);
   }
-  fixed NFixed(int p) {
-	  fixed o = Fixed();
+  sfloat NFixed(int p) {
+	  sfloat o = Fixed();
 	  while (--p > 0) o *= Fixed();
 	  return o;
   }

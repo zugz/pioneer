@@ -24,28 +24,24 @@ static const struct {
 	fixed meltingPoint;
 	fixed boilingPoint; // at 1 bar
 	fixed enthalpyVap;
-	fixed irAbsorption[40]; // 2 micrometer wide bands centred on 1um, 3um, 5um, ..., 39um
+	char irAbsorption[20]; // percent. 2 micrometer wide bands centred on 1um, 3um, 5um, ..., 39um
 } s_chemStats[CHEM_MAX] = {
 	/* H2 */
 	{ fixed(14,1), fixed(20,1), fixed(449,1) },
 	/* O2 */
 	{ fixed(54,1), fixed(90,1), fixed(6820,1), // IR absorption actually for ozone
-          { fixed(0), fixed(10,100), fixed(7,100), fixed(0), fixed(10,100), fixed(0), fixed(0), fixed(0), fixed(0),
-	    fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0) } },
+          { 0, 10, 7, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
 	/* N2 */
 	{ fixed(63,1), fixed(77,1), fixed(2792,1) },
 	/* H2O */
 	{ fixed(27315,100), fixed(37315,100), fixed(40657,1),
-          { fixed(5,100), fixed(10,100), fixed(30,100), fixed(80,100), fixed(5,100), fixed(0), fixed(0), fixed(0), fixed(20,100),
-	    fixed(25,100), fixed(40,100), fixed(50,100), fixed(60,100), fixed(85,100), fixed(99,100), fixed(99,100), fixed(99,100), fixed(99,100), fixed(99,100), fixed(99,100) } },
+          { 5, 10, 30, 80, 5, 0, 0, 0, 20, 25, 40, 50, 60, 85, 99, 99, 99, 99, 99, 99 } },
 	/* CO2 */
 	{ fixed(195,1), fixed(216,1), fixed(15326,1),
-          { fixed(0), fixed(15,100), fixed(15,100), fixed(0), fixed(0), fixed(0), fixed(15,100), fixed(99,100), fixed(20,100),
-	    fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0) } },
+          { 0, 15, 15, 0, 0, 0, 15, 99, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
 	/* CH4 */
 	{ fixed(91,1), fixed(112,1), fixed(8180,1),
-          { fixed(0), fixed(10,100), fixed(0), fixed(15,100), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0),
-	    fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0), fixed(0) } },
+          { 0, 10, 0, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
 	/* NH3 */
 	{ fixed(195,1), fixed(240,1), fixed(23350,1),
 
@@ -342,7 +338,7 @@ static int CalcSurfaceTemp(const SBody *primary, fixed distToPrimary, fixed albe
 		energy_per_meter2 = calcEnergyPerUnitAreaAtDist(primary->radius, primary->averageTemp, distToPrimary);
 	}
 	const fixed surface_temp_pow4 = energy_per_meter2*(1-albedo)/(1-greenhouse);
-	return isqrt(isqrt((surface_temp_pow4.v>>fixed::FRAC)*4409673));
+	return sfloat::Pow(surface_temp_pow4 * 4409673, sfloat(1,-2,false)).ToInt32();
 }
 
 vector3d Orbit::OrbitalPosAtTime(double t)
@@ -856,19 +852,8 @@ fixed SBody::CalcHillRadius() const
 	if (GetSuperType() <= SUPERTYPE_STAR) {
 		return fixed(0);
 	} else {
-		// playing with precision since these numbers get small
 		// masses in earth masses
-		fixedf<32> mprimary = parent->GetMassInEarths();
-
-		fixedf<48> a = semiMajorAxis;
-		fixedf<48> e = eccentricity;
-
-		return fixed(a * (fixedf<48>(1,1)-e) *
-				fixedf<48>::CubeRootOf(fixedf<48>(
-						mass / (fixedf<32>(3,1)*mprimary))));
-		
-		//fixed hr = semiMajorAxis*(fixed(1,1) - eccentricity) *
-		//  fixedcuberoot(mass / (3*mprimary));
+		return semiMajorAxis * (1 - eccentricity) * sfloat::CubeRoot(mass / (3 * parent->GetMassInEarths()));
 	}
 }
 
@@ -924,9 +909,9 @@ void StarSystem::MakePlanetsAround(SBody *primary, MTRand &rand)
 		if (primary->type == SBody::TYPE_WHITE_DWARF) {
 			// white dwarfs will have started as stars < 8 solar
 			// masses or so, so pick discMax according to that
-			discMax = 100 * rand.NFixed(2)*fixed::SqrtOf(fixed(1,2) + fixed(8,1)*rand.Fixed());
+			discMax = 100 * rand.NFixed(2)*fixed::Sqrt(fixed(1,2) + fixed(8,1)*rand.Fixed());
 		} else {
-			discMax = 100 * rand.NFixed(2)*fixed::SqrtOf(primary->mass);
+			discMax = 100 * rand.NFixed(2)*fixed::Sqrt(primary->mass);
 		}
 		// having limited discMin by bin-separation/fake roche, and
 		// discMax by some relation to star mass, we can now compute
@@ -1045,7 +1030,7 @@ const SBody *SBody::FindStarAndTrueOrbitalRange(fixed &orbMin, fixed &orbMax)
 fixed SBody::CalcGlobalWarming() const
 {
 	// emission by planet
-	sfloat irEmission[40];
+	sfloat irEmission[20];
 	// planck blackbody radiation formula:
 	// I(l) = (2*h*c**2) / (l**5 * (e**((hc)/(lkT)) - 1))
 	// Which without constants is:
@@ -1054,19 +1039,38 @@ fixed SBody::CalcGlobalWarming() const
 	// l = 0.000069 corresponds to 1um
 	const sfloat oneMicron = sfloat(69,1000000);
 	const sfloat T = sfloat(averageTemp,1);
-	T.Print();
 
 	printf("Temperature: %f K (%d)\n", T.ToDouble(), averageTemp);
-	for (int i=0; i<40; i++) {
-		const sfloat l = sfloat(i+1,1) * oneMicron;
+	sfloat total;
+	for (int i=0; i<20; i++) {
+		const sfloat l = sfloat(2*i+1,1) * oneMicron;
 		irEmission[i] = sfloat(1,1) / (l*l*l*l*l * (sfloat::Exp(sfloat(1,1) / (l*T)) - sfloat(1,1)));
-		printf("%.0f um emission: %e\n", (double)(i+1), irEmission[i].ToDouble());
+		total += irEmission[i];
 	}
-	exit(0);
+	/* sortof normalize the shit */
+	total = sfloat(1,1) / total;
+	for (int i=0; i<20; i++) {
+		printf("%.0f um emission: %f%%\n", (double)(2*i+1), 100.0*(total * irEmission[i]).ToDouble());
+	}
+
+	sfloat greenhouse;
+
+	for (int band=0; band<20; band++) {
+		sfloat bandabs;
+		for (int gas=0; gas<CHEM_MAX; gas++) {
+			bandabs += m_gases[gas] * sfloat(s_chemStats[gas].irAbsorption[band], 100);
+		}
+		bandabs = bandabs / (sfloat(1,1) + bandabs);
+		printf("%.0f um absorption: %f%%\n", (double)(2*band+1), 100.0*(bandabs).ToDouble());
+		greenhouse += total * irEmission[band] * bandabs;
+	}
+	printf("Greenhouse: %f\n", greenhouse.ToDouble());
+	return fixed((greenhouse*sfloat(1000,1)).ToInt32(), 1000);
 }
 
 void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 {
+#if 0
 	///////////////////////
 	// OK, pick composition
 	///////////////////////
@@ -1096,7 +1100,7 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 			crustLightTrans.ToDouble(),
 			crustHeavyMetals.ToDouble());
 	// make terrible estimate of radius
-	radius = fixed::CubeRootOf(mass);
+	radius = fixed::CubeRoot(mass);
 
 	for (int i=0; i<CHEM_MAX; i++) {
 		m_gases[i] = m_liquids[i] = m_ices[i] = 0;
@@ -1130,20 +1134,20 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 		// radius in earth radii
 		fixed minDistToStar, maxDistToStar, averageDistToStar;
 		const SBody *star = FindStarAndTrueOrbitalRange(minDistToStar, maxDistToStar);
-		averageDistToStar = (minDistToStar+maxDistToStar)>>1;
+		averageDistToStar = (minDistToStar+maxDistToStar)*sfloat(1,2);
 		printf("Dist to star %.3fAU, star temperature: %dK\n", averageDistToStar.ToDouble(), star->averageTemp);
 
-		for (int iteration=0; iteration<100; iteration++) {
+		for (int iteration=0; iteration<20; iteration++) {
 			// OK, so when you condense the atmosphere out the pressure falls and
 			// boiling points change, so it must be done in iterations
-			fixed m = fixed(1,50); 
+			fixed m = fixed(1,10); 
 			fixed atmosphereMass = fixed(0);
 			for (int i=0; i<CHEM_MAX; i++) atmosphereMass += m_gases[i];
 			m_surfacePressure = (mass * atmosphereMass) / (radius*radius*radius*radius);
 
 			fixed albedo = fixed(14,100);
 			// H2O changes albedo by cloud formation
-			albedo += fixed::SqrtOf(m_gases[CHEM_H2O]);
+			albedo += fixed::Sqrt(m_gases[CHEM_H2O]);
 			// all ices raise albedo
 			for (int i=0; i<CHEM_MAX; i++) { albedo += m_ices[i]; }
 			// squish range in a highly dubious made up way...
@@ -1161,7 +1165,9 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 			printf("Global warming: %f, albedo: %f, surface atmospheric pressure %f\n", globalwarming.ToDouble(),
 					albedo.ToDouble(), m_surfacePressure.ToDouble());
 
+			printf("Global warming: %f\n", globalwarming.ToDouble());
 			averageTemp = CalcSurfaceTemp(star, averageDistToStar, albedo, globalwarming);
+			printf("New average temp %d K\n", averageTemp);
 			printf("Average surface temp %dK, pressure %f bar\n", averageTemp, m_surfacePressure.ToDouble());
 			printf("State	H2	O2	N2	H2O	CO2	CH4	NH3");
 			printf("\nGas");
@@ -1208,6 +1214,7 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 			for (int i=0; i<CHEM_MAX; i++) { printf("\t%.3f", m_ices[i].ToDouble()); }
 			printf("\n");
 	}
+#endif
 
 	////////////////////////
 
@@ -1221,7 +1228,7 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 
 	fixed minDistToStar, maxDistToStar, averageDistToStar;
 	const SBody *star = FindStarAndTrueOrbitalRange(minDistToStar, maxDistToStar);
-	averageDistToStar = (minDistToStar+maxDistToStar)>>1;
+	averageDistToStar = (minDistToStar+maxDistToStar)*sfloat(1,2);
 
 	/* this is all of course a total fucking joke and un-physical */
 	int bbody_temp;
@@ -1352,7 +1359,7 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 		// kind of crappy
 		if ((mass > fixed(8,10)) && (!rand.Int32(0,15))) type = SBody::TYPE_PLANET_HIGHLY_VOLCANIC;
 	}
-	//radius = fixed(bodyTypeInfo[type].radius, 100);
+	radius = fixed(bodyTypeInfo[type].radius, 100);
 }
 
 void StarSystem::MakeShortDescription(MTRand &rand)
