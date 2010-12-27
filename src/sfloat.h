@@ -165,17 +165,11 @@ public:
 		b.sign = !b.sign;
 		return (a - b);
 	}
-	friend sfloat operator+(sfloat a, int b) {
-		return a + sfloat(abs(b), 0, (b>>31)&1);
-	}
-	friend sfloat operator-(sfloat a, int b) {
-		return a - sfloat(abs(b), 0, (b>>31)&1);
-	}
-	friend sfloat operator*(sfloat a, int b) {
-		return a * sfloat(abs(b), 0, (b>>31)&1);
-	}
+	friend sfloat operator+(sfloat a, int b) { return a + sfloat(b); }
 	friend sfloat operator+(int a, sfloat b) { return b+a; }
-	friend sfloat operator-(int a, sfloat b) { return b-a; }
+	friend sfloat operator-(sfloat a, int b) { return a - sfloat(b); }
+	friend sfloat operator-(int a, sfloat b) { return sfloat(a) - b; }
+	friend sfloat operator*(sfloat a, int b) { return a * sfloat(b); }
 	friend sfloat operator*(int a, sfloat b) { return b*a; }
 	sfloat &operator+=(int b) { *this = (*this) + b; return *this; }
 	sfloat &operator-=(int b) { *this = (*this) - b; return *this; }
