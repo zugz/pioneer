@@ -12,7 +12,7 @@
 #include "custom_starsystems.h"
 #include "DynamicBody.h"
 #include "EquipType.h"
-#include "fixed.h"
+#include "sfloat.h"
 #include "Frame.h"
 #include "gameconsts.h"
 #include "GenericSystemView.h"

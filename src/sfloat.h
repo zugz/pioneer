@@ -264,6 +264,4 @@ private:
 	static const sfloat exp_negpow2[10];
 };
 
-typedef sfloat fixed;
-
 #endif /* SFLOAT_H */

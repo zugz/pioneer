@@ -15,7 +15,7 @@ struct CustomSystem;
 class SBody;
 
 // doubles: all masses in Kg, all lengths in meters
-// fixed: any mad scheme
+// sfloat: any mad scheme
 
 enum {  ECON_MINING = (1<<0), 
 	ECON_AGRICULTURE = (1<<1), 
@@ -92,7 +92,7 @@ public:
 	SBody();
 	~SBody();
 	void PickPlanetType(StarSystem *, MTRand &rand);
-	const SBody *FindStarAndTrueOrbitalRange(fixed &orbMin, fixed &orbMax);
+	const SBody *FindStarAndTrueOrbitalRange(sfloat &orbMin, sfloat &orbMax);
 	SBody *parent;
 	std::vector<SBody*> children;
 
@@ -154,7 +154,7 @@ public:
 		else
 			return mass.ToDouble() * EARTH_MASS;
 	}
-	fixed GetMassInEarths() const {
+	sfloat GetMassInEarths() const {
 		if (GetSuperType() <= SUPERTYPE_STAR)
 			return mass * sfloat(332998,0,false);
 		else
@@ -164,10 +164,10 @@ public:
 	double GetRotationPeriod() const {
 		return rotationPeriod.ToDouble()*60*60*24;
 	}
-	fixed CalcHillRadius() const;
+	sfloat CalcHillRadius() const;
 
 	double GetMaxChildOrbitalDistance() const;
-	void PopulateStage1(StarSystem *system, fixed &outTotalPop);
+	void PopulateStage1(StarSystem *system, sfloat &outTotalPop);
 	void PopulateAddStations(StarSystem *system);
 
 	Uint32 id; // index into starsystem->m_bodies
@@ -175,44 +175,44 @@ public:
 	Orbit orbit;
 	Uint32 seed; // Planet.cpp can use to generate terrain
 	std::string name;
-	fixed radius; 
-	fixed mass; // earth masses if planet, solar masses if star
-	fixed orbMin, orbMax; // periapsism, apoapsis in AUs
-	fixed rotationPeriod; // in days
-	fixed humanActivity; // 0 - 1
-	fixed semiMajorAxis; // in AUs
-	fixed eccentricity;
-	fixed axialTilt; // in radians
+	sfloat radius; 
+	sfloat mass; // earth masses if planet, solar masses if star
+	sfloat orbMin, orbMax; // periapsism, apoapsis in AUs
+	sfloat rotationPeriod; // in days
+	sfloat humanActivity; // 0 - 1
+	sfloat semiMajorAxis; // in AUs
+	sfloat eccentricity;
+	sfloat axialTilt; // in radians
 	int averageTemp;
 	BodyType type;
 
 	/* planet composition */
-	fixed crustCarbon;
-	fixed crustOxygen;
-	fixed crustSilicon;
-	fixed crustSulphur;
-	fixed crustLightEarths; // group1, group2 and Aluminium
-	fixed crustLightTrans; // Scandium to Zinc
-	fixed crustHeavyMetals;
+	sfloat crustCarbon;
+	sfloat crustOxygen;
+	sfloat crustSilicon;
+	sfloat crustSulphur;
+	sfloat crustLightEarths; // group1, group2 and Aluminium
+	sfloat crustLightTrans; // Scandium to Zinc
+	sfloat crustHeavyMetals;
 	/* can be solid, liquid or gas depending on temperature */
-	fixed m_gases[CHEM_MAX];
-	fixed m_liquids[CHEM_MAX];
-	fixed m_ices[CHEM_MAX];
+	sfloat m_gases[CHEM_MAX];
+	sfloat m_liquids[CHEM_MAX];
+	sfloat m_ices[CHEM_MAX];
 	/* other attributes */
-	//fixed volcanicity;
+	//sfloat volcanicity;
 
 	/* Calculated from the above stats */
-	fixed m_surfacePressure;
+	sfloat m_surfacePressure;
 	
 	/* economy type stuff */
-	fixed m_population;
-	fixed m_metallicity;
-	fixed m_agricultural;
+	sfloat m_population;
+	sfloat m_metallicity;
+	sfloat m_agricultural;
 
 	const char *heightMapFilename;
 
 private:
-	fixed CalcGlobalWarming() const;
+	sfloat CalcGlobalWarming() const;
 };
 
 class StarSystem {
@@ -260,12 +260,12 @@ public:
 	// index into this will be the SBody ID used by SBodyPath
 	std::vector<SBody*> m_bodies;
 	
-	fixed m_metallicity;
-	fixed m_industrial;
-	fixed m_agricultural;
+	sfloat m_metallicity;
+	sfloat m_industrial;
+	sfloat m_agricultural;
 
-	fixed m_humanProx;
-	fixed m_totalPop;
+	sfloat m_humanProx;
+	sfloat m_totalPop;
 	// percent price alteration
 	int m_tradeLevel[Equip::TYPE_MAX];
 	int m_econType;
@@ -286,8 +286,8 @@ private:
 	void MakePlanetsAround(SBody *primary, MTRand &rand);
 	void MakeRandomStar(SBody *sbody, MTRand &rand);
 	void MakeStarOfType(SBody *sbody, SBody::BodyType type, MTRand &rand);
-	void MakeStarOfTypeLighterThan(SBody *sbody, SBody::BodyType type, fixed maxMass, MTRand &rand);
-	void MakeBinaryPair(SBody *a, SBody *b, fixed minDist, MTRand &rand);
+	void MakeStarOfTypeLighterThan(SBody *sbody, SBody::BodyType type, sfloat maxMass, MTRand &rand);
+	void MakeBinaryPair(SBody *a, SBody *b, sfloat minDist, MTRand &rand);
 	void CustomGetKidsOf(SBody *parent, const CustomSBody *customDef, const int parentIdx, int *outHumanInfestedness, MTRand &rand);
 	void GenerateFromCustom(const CustomSystem *, MTRand &rand);
 	void Populate(bool addSpaceStations);

@@ -127,12 +127,12 @@ public:
       static_cast<double>(rand_int32() >> 6)) * (1. / 9007199254740992.);
   }
   // [0,1)
-  sfloat Fixed() {
+  sfloat Sfloat() {
 	  return sfloat(rand_int32(), -32, false);
   }
-  sfloat NFixed(int p) {
-	  sfloat o = Fixed();
-	  while (--p > 0) o *= Fixed();
+  sfloat NSfloat(int p) {
+	  sfloat o = Sfloat();
+	  while (--p > 0) o *= Sfloat();
 	  return o;
   }
   // [min,max]

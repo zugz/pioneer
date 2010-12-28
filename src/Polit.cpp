@@ -53,26 +53,26 @@ struct politDesc_t {
 	int rarity;
 	Bloc bloc;
 	EconType econ;
-	fixed baseLawlessness;
+	sfloat baseLawlessness;
 };
 const politDesc_t s_govDesc[GOV_MAX] = {
 	{ "<invalid turd>" },
-	{ "No central governance", 0, 0, BLOC_NONE, ECON_NONE, fixed(1,1) },
-	{ "Earth Federation Colonial Rule", 0, 2, BLOC_EARTHFED, ECON_CAPITALIST, fixed(3,10) },
-	{ "Earth Federation Democracy", 4, 3, BLOC_EARTHFED, ECON_CAPITALIST, fixed(15,100) },
-	{ "Imperial Rule", 4, 3, BLOC_EMPIRE, ECON_PLANNED, fixed(15,100) },
-	{ "Liberal democracy", 3, 2, BLOC_CIS, ECON_CAPITALIST, fixed(25,100) },
-	{ "Social democracy", 3, 2, BLOC_CIS, ECON_MIXED, fixed(20,100) },
-	{ "Liberal democracy", 3, 2, BLOC_NONE, ECON_CAPITALIST, fixed(25,100) },
-	{ "Corporate system", 1, 2, BLOC_NONE, ECON_CAPITALIST, fixed(40,100) },
-	{ "Social democracy", 3, 2, BLOC_NONE, ECON_MIXED, fixed(25,100) },
-	{ "Military dictatorship", 1, 5, BLOC_EARTHFED, ECON_CAPITALIST, fixed(40,100) },
-	{ "Military dictatorship", 1, 6, BLOC_NONE, ECON_CAPITALIST, fixed(25,100) },
-	{ "Military dictatorship", 1, 6, BLOC_NONE, ECON_MIXED, fixed(25,100) },
-	{ "Military dictatorship", 1, 5, BLOC_EMPIRE, ECON_MIXED, fixed(40,100) },
-	{ "Communist", 1, 10, BLOC_NONE, ECON_PLANNED, fixed(25,100) },
-	{ "Plutocratic dictatorship", 1, 4, BLOC_NONE, ECON_VERY_CAPITALIST, fixed(45,100) },
-	{ "Disorder - Overall governance contested by armed factions", 0, 2, BLOC_NONE, ECON_NONE, fixed(90,100) },
+	{ "No central governance", 0, 0, BLOC_NONE, ECON_NONE, sfloat(1,1) },
+	{ "Earth Federation Colonial Rule", 0, 2, BLOC_EARTHFED, ECON_CAPITALIST, sfloat(3,10) },
+	{ "Earth Federation Democracy", 4, 3, BLOC_EARTHFED, ECON_CAPITALIST, sfloat(15,100) },
+	{ "Imperial Rule", 4, 3, BLOC_EMPIRE, ECON_PLANNED, sfloat(15,100) },
+	{ "Liberal democracy", 3, 2, BLOC_CIS, ECON_CAPITALIST, sfloat(25,100) },
+	{ "Social democracy", 3, 2, BLOC_CIS, ECON_MIXED, sfloat(20,100) },
+	{ "Liberal democracy", 3, 2, BLOC_NONE, ECON_CAPITALIST, sfloat(25,100) },
+	{ "Corporate system", 1, 2, BLOC_NONE, ECON_CAPITALIST, sfloat(40,100) },
+	{ "Social democracy", 3, 2, BLOC_NONE, ECON_MIXED, sfloat(25,100) },
+	{ "Military dictatorship", 1, 5, BLOC_EARTHFED, ECON_CAPITALIST, sfloat(40,100) },
+	{ "Military dictatorship", 1, 6, BLOC_NONE, ECON_CAPITALIST, sfloat(25,100) },
+	{ "Military dictatorship", 1, 6, BLOC_NONE, ECON_MIXED, sfloat(25,100) },
+	{ "Military dictatorship", 1, 5, BLOC_EMPIRE, ECON_MIXED, sfloat(40,100) },
+	{ "Communist", 1, 10, BLOC_NONE, ECON_PLANNED, sfloat(25,100) },
+	{ "Plutocratic dictatorship", 1, 4, BLOC_NONE, ECON_VERY_CAPITALIST, sfloat(45,100) },
+	{ "Disorder - Overall governance contested by armed factions", 0, 2, BLOC_NONE, ECON_NONE, sfloat(90,100) },
 };
 
 void Init()
@@ -184,7 +184,7 @@ const char *GetAllegianceDesc(StarSystem *s)
 
 #define POLIT_SEED 0x1234abcd
 
-void GetSysPolitStarSystem(const StarSystem *s, const fixed human_infestedness, SysPolit &outSysPolit)
+void GetSysPolitStarSystem(const StarSystem *s, const sfloat human_infestedness, SysPolit &outSysPolit)
 {
 	int sx, sy, sys_idx;
 	s->GetPos(&sx, &sy, &sys_idx);
@@ -214,7 +214,7 @@ void GetSysPolitStarSystem(const StarSystem *s, const fixed human_infestedness, 
 	}
 
 	outSysPolit.govType = a;
-	outSysPolit.lawlessness = s_govDesc[a].baseLawlessness * rand.Fixed();
+	outSysPolit.lawlessness = s_govDesc[a].baseLawlessness * rand.Sfloat();
 }
 
 #define POLIT_SALT 0x8732abdf

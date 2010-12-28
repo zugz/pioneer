@@ -316,10 +316,10 @@ void SystemInfoView::SystemChanged(StarSystem *s)
 		
 		col1->Add((new Gui::Label("Population:"))->Color(1,1,0), 0, 4*YSEP);
 		std::string popmsg;
-		fixed pop = m_system->m_totalPop;
-		if (pop >= fixed(1,1)) { popmsg = stringf(256, "Over %d billion", pop.ToInt32()); }
-		else if (pop >= fixed(1,1000)) { popmsg = stringf(256, "Over %d million", (pop*1000).ToInt32()); }
-		else if (pop != fixed(0)) { popmsg = "Only a few thousand"; }
+		sfloat pop = m_system->m_totalPop;
+		if (pop >= sfloat(1,1)) { popmsg = stringf(256, "Over %d billion", pop.ToInt32()); }
+		else if (pop >= sfloat(1,1000)) { popmsg = stringf(256, "Over %d million", (pop*1000).ToInt32()); }
+		else if (pop != sfloat(0)) { popmsg = "Only a few thousand"; }
 		else { popmsg = "No registered inhabitants"; }
 		col2->Add(new Gui::Label(popmsg), 0, 4*YSEP);
 

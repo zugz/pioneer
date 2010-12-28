@@ -8,17 +8,17 @@ struct CustomSBody {
 	const char *name; // null to end system
 	SBody::BodyType type;
 	int primaryIdx;  // -1 for primary
-	fixed radius; // in earth radii for planets, sol radii for stars
-	fixed mass; // earth masses or sol masses
+	sfloat radius; // in earth radii for planets, sol radii for stars
+	sfloat mass; // earth masses or sol masses
 	int averageTemp; // kelvin
-	fixed semiMajorAxis; // in AUs
-	fixed eccentricity;
+	sfloat semiMajorAxis; // in AUs
+	sfloat eccentricity;
 	// for orbiting things, latitude = inclination
 	struct {
 		float latitude, longitude; // radians
 	};
-	fixed rotationPeriod; // in days
-	fixed axialTilt; // in radians
+	sfloat rotationPeriod; // in days
+	sfloat axialTilt; // in radians
 	int econType; // StarSystem.cpp enum ECON_XXX
 	const char *heightMapFilename;
 };
