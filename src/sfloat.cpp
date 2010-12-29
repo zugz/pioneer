@@ -9,7 +9,9 @@ sfloat sfloat::Log(sfloat a)
 {
 	const sfloat ln2(2977044471U,-32,false);
 	if (a <= sfloat(0,0,false)) {
-		return sfloat(0,0,false,TYPE_NAN);
+		sfloat r;
+		r.val = SFLOAT_NVE_INF;
+		return r;
 	}
 	// do powers of two
 	sfloat r(0,0,false);
@@ -32,30 +34,31 @@ sfloat sfloat::Log(sfloat a)
 	return r;
 }
 
-sfloat sfloat::Exp(sfloat val)
+sfloat sfloat::Exp(sfloat p)
 {
-	sfloat fraction = val;
+	if (p > sfloat(256,0,false)) {
+		sfloat r;
+		r.val = SFLOAT_PVE_INF;
+		return r;
+	}
+	sfloat fraction = p;
 	sfloat rhigh = sfloat(1,0,false);
 	// do e^(+ve power of two) bits
 	if (fraction > sfloat(1,0,false)) {
-		sfloat intpart = fraction.floor();
-		if (intpart.m >= 1024) {
-			// would overflow 16-bit exponent
-			return sfloat(0,0,false,TYPE_INF);
-		}
-		fraction -= intpart;
-		for(int i=9; i>=0; i--) {
-			if (intpart.m & (1<<i)) {
+		int intpart = fraction.ToInt32();
+		fraction -= sfloat(intpart);
+		for(int i=8; i>=0; i--) {
+			if (intpart & (1<<i)) {
 				rhigh *= exp_pow2[i];
 			}
 		}
 	}
-	// do e^(+ve power of two) bits
+	// do -e^(+ve power of two) bits
 	if (fraction < sfloat(1,0,true)) {
-		sfloat intpart = fraction.floor();
-		fraction -= intpart;
-		for(int i=9; i>=0; i--) {
-			if (intpart.m & (1<<i)) {
+		int intpart = -fraction.ToInt32();
+		fraction += sfloat(intpart);
+		for(int i=7; i>=0; i--) {
+			if (intpart & (1<<i)) {
 				rhigh *= exp_negpow2[i];
 			}
 		}
@@ -63,7 +66,7 @@ sfloat sfloat::Exp(sfloat val)
 	sfloat r(1,0,false);
 	sfloat x = fraction;
 	r += fraction;
-	for (int i=2; i<12; i++) {
+	for (int i=2; i<11; i++) {
 		x = x * fraction;
 		r += x * inverseFactorials[i];
 	}
@@ -137,7 +140,7 @@ const sfloat sfloat::inverses[32] = {
 	sfloat(2369637128U,-36,false),
 	sfloat(2290649224U,-36,false)
 };
-const sfloat sfloat::exp_pow2[11] = {
+const sfloat sfloat::exp_pow2[8] = {
 	sfloat(2918732888U,-30,false),
 	sfloat(3966969286U,-29,false),
 	sfloat(3664019825U,-26,false),
@@ -146,11 +149,8 @@ const sfloat sfloat::exp_pow2[11] = {
 	sfloat(2409758306U,15,false),
 	sfloat(2704064871U,61,false),
 	sfloat(3404899886U,153,false),
-	sfloat(2699285568U,338,false),
-	sfloat(3392874533U,707,false),
-	sfloat(2147483648U,993,false)
 };
-const sfloat sfloat::exp_negpow2[10] = {
+const sfloat sfloat::exp_negpow2[7] = {
 	sfloat(3160060337U,-33,false), // exp(0)
 	sfloat(2325042461U,-34,false), // exp(-1)
 	sfloat(2517282241U,-37,false),
@@ -158,46 +158,43 @@ const sfloat sfloat::exp_negpow2[10] = {
 	sfloat(4054506967U,-55,false),
 	sfloat(3827509179U,-78,false),
 	sfloat(3410928537U,-124,false),
-	sfloat(2708852636U,-216,false),
-	sfloat(3416967861U,-401,false),
-	sfloat(2718453613U,-770,false),
 };
 
 #ifdef TEST
 static void testLog()
 {
 	printf("Testing log(): ");
-	double min = FLT_MAX;
-	double max = -FLT_MAX;
-	for (int i=-16; i<10000; i++) {
-		sfloat v(rand()&0x7fffffff, (rand()%500) - 272, false);
-		if (v.ToDouble() < min) min = v.ToDouble();
-		if (v.ToDouble() > max) max = v.ToDouble();
-		double model = log(v.ToDouble());
-		double test = sfloat::Log(v).ToDouble();
-	//	printf("Log %e = %e (%e)\n", v.ToDouble(), test, model);
-		assert ((model == test) || (fabs(test/model - 1.0) < 0.0000001));
+	float min = FLT_MAX;
+	float max = -FLT_MAX;
+	for (int i=-16; i<1000; i++) {
+		sfloat v(rand()&0x7fffffff, (rand()%400) - 222, false);
+		if (v.ToFloat() < min) min = v.ToFloat();
+		if (v.ToFloat() > max) max = v.ToFloat();
+		float model = log(v.ToFloat());
+		float test = sfloat::Log(v).ToFloat();
+		//printf("Log %e = %e (%e)\n", v.ToFloat(), test, model);
+		assert ((model == test) || (fabs(test/model - 1.0) < 0.00001));
 	}
 	printf("ok (range %e - %e)\n", min, max);
 }
 static void testExp()
 {
 	printf("Testing exp(): ");
-	double min = FLT_MAX;
-	double max = -FLT_MAX;
+	float min = FLT_MAX;
+	float max = -FLT_MAX;
 	for (int i=1; i<10000; i++) {
 		sfloat v;
 		if (rand()&1) {
-			v = sfloat(rand()%(1<<19), -10, true);
+			v = sfloat(rand()%(1<<19), -15, true);
 		} else {
 			v = sfloat(rand()%(1024*1024), -10, false);
 		}
-		double model = exp(v.ToDouble());
-		double test = sfloat::Exp(v).ToDouble();
-		if (v.ToDouble() < min) min = v.ToDouble();
-		if (v.ToDouble() > max) max = v.ToDouble();
-	//	printf("exp %e = %e (%e)\n", v.ToDouble(), test, model);
-		assert ((model == test) || (fabs(test/model - 1.0) < 0.00000001));
+		float model = exp(v.ToFloat());
+		float test = sfloat::Exp(v).ToFloat();
+		if (v.ToFloat() < min) min = v.ToFloat();
+		if (v.ToFloat() > max) max = v.ToFloat();
+	//	printf("exp %e = %e (%e)\n", v.ToFloat(), test, model);
+		assert ((model == test) || (fabs(test/model - 1.0) < 0.00001));
 	}
 	printf("ok (range %e - %e)\n", min, max);
 }
@@ -209,11 +206,11 @@ static void testMul()
 		sfloat b(rand(),(rand()&0x1f)-0xf,rand()&1 ? true : false);
 		if ((rand()&0x1f) == 0) a = sfloat(0,0,false);
 		if ((rand()&0x1f) == 0) b = sfloat(0,0,false);
-		double model = a.ToDouble() * b.ToDouble();
-		double test = (a*b).ToDouble();
-		//printf("mul %e*%e = %e (%e)\n", a.ToDouble(), b.ToDouble(), test, model);
+		float model = a.ToFloat() * b.ToFloat();
+		float test = (a*b).ToFloat();
+		//printf("mul %e*%e = %e (%e)\n", a.ToFloat(), b.ToFloat(), test, model);
 		assert((a*b)==(b*a));
-		assert ((model == test) || fabs(test/model - 1.0) < 0.000000001);
+		assert ((model == test) || fabs(test/model - 1.0) < 0.000001);
 	}
 	printf("ok\n");
 }
@@ -224,10 +221,10 @@ static void testDiv()
 		sfloat a(rand(),(rand()&0x1f)-48,rand()&1 ? true : false);
 		sfloat b(rand(),(rand()&0x1f)-48,rand()&1 ? true : false);
 		if ((rand()&0x1f) == 0) a = sfloat(0,0,false);
-		double model = a.ToDouble() / b.ToDouble();
-		double test = (a/b).ToDouble();
-		//printf("div %e*%e = %e (%e)\n", a.ToDouble(), b.ToDouble(), test, model);
-		assert ((model == test) || fabs(test/model - 1.0) < 0.000000001);
+		float model = a.ToFloat() / b.ToFloat();
+		float test = (a/b).ToFloat();
+		//printf("div %e*%e = %e (%e)\n", a.ToFloat(), b.ToFloat(), test, model);
+		assert ((model == test) || fabs(test/model - 1.0) < 0.000001);
 	}
 	printf("ok\n");
 }
@@ -239,11 +236,11 @@ static void testAdd()
 		sfloat b(rand()<<1,rand()&0xf,rand()&1 ? true : false);
 		if ((rand()&0x1f) == 0) a = sfloat(0,0,false);
 		if ((rand()&0x1f) == 0) b = sfloat(0,0,false);
-		double model = a.ToDouble() + b.ToDouble();
-		double test = (a+b).ToDouble();
-		//printf("add %e+%e = %e (%e)\n", a.ToDouble(), b.ToDouble(), test, model);
+		float model = a.ToFloat() + b.ToFloat();
+		float test = (a+b).ToFloat();
+		//printf("add %e+%e = %e (%e)\n", a.ToFloat(), b.ToFloat(), test, model);
 		assert((a+b)==(b+a));
-		assert ((model == test) || fabs(test/model - 1.0) < 0.000000001);
+		assert ((model == test) || fabs(test/model - 1.0) < 0.000001);
 	}
 	printf("ok\n");
 }
@@ -255,10 +252,10 @@ static void testSub()
 		sfloat b(rand()<<1,rand()&0xf,rand()&1 ? true : false);
 		if ((rand()&0x1f) == 0) a = sfloat(0,0,false);
 		if ((rand()&0x1f) == 0) b = sfloat(0,0,false);
-		double model = a.ToDouble() - b.ToDouble();
-		double test = (a-b).ToDouble();
-		//printf("sub %e-%e = %e (%e)\n", a.ToDouble(), b.ToDouble(), test, model);
-		assert ((model == test) || fabs(test/model - 1.0) < 0.000000001);
+		float model = a.ToFloat() - b.ToFloat();
+		float test = (a-b).ToFloat();
+		//printf("sub %e-%e = %e (%e)\n", a.ToFloat(), b.ToFloat(), test, model);
+		assert ((model == test) || fabs(test/model - 1.0) < 0.000001);
 	}
 	printf("ok\n");
 }
@@ -270,26 +267,14 @@ static void testCmp()
 		sfloat b(rand()<<1,rand()&0xf,rand()&1 ? true : false);
 		if ((rand()&0x1f) == 0) a = sfloat(0,0,false);
 		if ((rand()&0x1f) == 0) b = sfloat(0,0,false);
-	//	printf("%f > %f\n", a.ToDouble(), b.ToDouble());
-		assert ((a.ToDouble() > b.ToDouble()) == (a > b));
-		assert ((a.ToDouble() >= b.ToDouble()) == (a >= b));
-		assert ((a.ToDouble() <= b.ToDouble()) == (a <= b));
-		assert ((a.ToDouble() < b.ToDouble()) == (a < b));
-		assert ((a.ToDouble() == b.ToDouble()) == (a == b));
+	//	printf("%f > %f\n", a.ToFloat(), b.ToFloat());
+		assert ((a.ToFloat() > b.ToFloat()) == (a > b));
+		assert ((a.ToFloat() >= b.ToFloat()) == (a >= b));
+		assert ((a.ToFloat() <= b.ToFloat()) == (a <= b));
+		assert ((a.ToFloat() < b.ToFloat()) == (a < b));
+		assert ((a.ToFloat() == b.ToFloat()) == (a == b));
 	}
 	printf("ok\n");
-}
-
-/* Don't use this shit for anything since it won't
- * give identical results on all platforms (probably) */
-static sfloat ieee_double_to_sfloat(double f)
-{
-	Uint64 data = *((Uint64*)&f);
-	Uint64 m = (data & 0xfffffffffffffULL) | (1ULL<<52);
-	m >>= 21;
-	short e = ((data>>52) & 0x7ff) - 1023 - 31;
-	char sign = (data>>63) & 1;
-	return sfloat(m, e, sign);
 }
 
 int main()
@@ -300,12 +285,8 @@ int main()
 	testMul();
 	testDiv();
 	testCmp();
-	testLog();
 	testExp();
-
-//	ieee_double_to_sfloat(0.33333333333333333333333333333333333333333333333).Print();
-//	ieee_double_to_sfloat(log(2.0)).Print();
-//	printf("%f\n", sfloat::Cuberoot(sfloat(36,0,true)).ToDouble());
+	testLog();
 
 	return 0;
 }

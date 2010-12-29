@@ -4,67 +4,123 @@
 #include <SDL_stdinc.h>
 #include <math.h>
 
+#ifndef CLAMP
+# define CLAMP(a, min, max)      (((a) > (max)) ? (max) : (((a) < (min)) ? (min) : (a)))
+#endif /* CLAMP */
+
+#define SFLOAT_PVE_INF 0x7f800000
+#define SFLOAT_NVE_INF 0xff800000
+
 class sfloat {
 public:
-	unsigned int m; // mantissa
-	short e; // exponent
-	unsigned char sign;
-	unsigned char type;
-
-	enum sfloat_type {
-		TYPE_NUMBER = 0,
-		TYPE_INF = 1,
-		TYPE_NAN
+	union {
+		Uint32 val;
+		float fval;
 	};
+
+	struct upck_float {
+		Uint32 m; // mantissa
+		Sint16 e; // exponent
+		Uint8 sign;
+		void Normalize() {
+			if (m) {
+				while (m >= (1LL<<24)) {
+					m >>= 1;
+					e++;
+				}
+				while (!(m&(1<<23))) {
+					m <<= 1;
+					e--;
+				}
+			}
+			if (!m) {
+				e = 0;
+			}
+		}
+	};
+
+private:
+	static sfloat Pack(const upck_float &f) {
+		sfloat r;
+		if ((!f.m) || ((f.e+150) < 0)) {
+			r.val = 0;
+		} else if (f.e + 150 >= 255) {
+			// infinity
+			r.val = (((Uint32)f.sign)<<31) | (0xff << 23);
+		} else {
+			r.val = (((Uint32)f.sign)<<31) | (((f.e+150)&0xff)<<23) | (f.m & 0x7fffff);
+		}
+		return r;
+	}
+	static upck_float Unpack(sfloat v) {
+		upck_float f;
+		assert(!v.IsInfinite());
+		assert(!v.IsNaN());
+		if (!v.val) {
+			f.m = f.e = f.sign = 0;
+		} else {
+			f.m = (v.val & 0x7fffff) | 0x800000;
+			f.e = (signed)((v.val>>23)&0xff)-150;
+			f.sign = (v.val>>31) & 1;
+		}
+		return f;
+	}
+public:
+	bool IsInfinite() const {
+		return (val == 0xff800000) || (val == 0x7f800000);
+	}
+	bool IsNaN() const {
+		return (((val >> 23) & 0xff) == 0xff) && (val & 0x7fffff);
+	}
 
 	/** As fraction */
 	sfloat(Uint64 numerator, Uint64 denominator) {
 		Uint64 mantissa = (numerator<<32) / denominator;
-		sign = 0;
-		e = -32;
-		while (mantissa >= (1ULL<<32)) {
+		upck_float f;
+		f.sign = 0;
+		f.e = -32;
+		while (mantissa >= (1ULL<<24)) {
 			mantissa >>= 1;
-			e++;
+			f.e++;
 		}
-		m = mantissa;
-		type = TYPE_NUMBER;
-		Normalize();
+		f.m = mantissa;
+		f.Normalize();
+		*this = Pack(f);
 	}
 
 	/** Native */
-	sfloat(unsigned int m, short e, bool sign, char type = TYPE_NUMBER) {
-		this->m = m;
-		this->e = e;
-		this->sign = sign ? 1 : 0;
-		this->type = type;
-		Normalize();
+	sfloat(unsigned int m, short e, bool sign) {
+		upck_float f;
+		f.m = m;
+		f.e = e;
+		f.sign = sign ? 1 : 0;
+		f.Normalize();
+		*this = Pack(f);
 	}
 	sfloat(int m) {
-		this->m = abs(m);
-		this->e = 0;
-		this->sign = (m>>31)&1;
-		this->type = TYPE_NUMBER;
-		Normalize();
+		upck_float f;
+		f.m = abs(m);
+		f.e = 0;
+		f.sign = (m>>31)&1;
+		f.Normalize();
+		*this = Pack(f);
 	}
-	sfloat() {
-		m = e = sign = type = 0;
-		Normalize();
-	}
+	sfloat(): val(0) {}
+
 	friend bool operator==(sfloat a, sfloat b) {
-		a.Normalize();
-		b.Normalize();
-		return ((a.type == b.type) && (a.m==b.m) && (a.e==b.e) && (a.sign==b.sign));
+		return a.val == b.val;
 	}
-	friend bool operator!=(sfloat a, sfloat b) { return !(a == b); }
+	friend bool operator!=(sfloat a, sfloat b) { return a.val != b.val; }
 	friend bool operator<(sfloat a, sfloat b) { return b>a; }
 	friend bool operator>(sfloat a, sfloat b) {
 		if (a == b) return false;
 		return a >= b;
 	}
-	friend bool operator>=(sfloat a, sfloat b) {
-		a.Normalize();
-		b.Normalize();
-		if (a == b) return true;
+	friend bool operator>=(sfloat _a, sfloat _b) {
+		if (_a == _b) return true;
+		if (_a.IsInfinite() || _b.IsInfinite()) return false;
+		upck_float a = Unpack(_a);
+		upck_float b = Unpack(_b);
 		if (a.sign) {
 			if (!b.sign) return false;
 			if (a.m == 0) return true;
@@ -89,81 +145,61 @@ public:
 
 	friend sfloat operator-(sfloat a) {
 		sfloat r;
-		r.m = a.m;
-		r.e = a.e;
-		r.sign = !a.sign;
+		r.val = a.val ^ (1<<31);
 		return r;
 	}
 	double ToDouble() const {
-		if (type == TYPE_NUMBER) {
-			if (sign) return -(double)m * pow(2.0, (double)e);
-			else return (double)m * pow(2.0, (double)e);
-		} else if (type == TYPE_INF) {
-			return 1.0/0.0;
-		} else {
-			return 0.0/0.0; // NAN
-		}
+		return (double)ToFloat();
 	}
-	float ToFloat() const { return (float)ToDouble(); }
-	int ToInt32() const { return floor().m; }
-	Sint64 ToInt64() const { return floor().m; } // PISH
-	friend sfloat operator*(sfloat a, sfloat b) {
-		if ((a.type == TYPE_NAN) || (b.type == TYPE_NAN)) {
-			return sfloat(0,0,false,TYPE_NAN);
-		}
-		sfloat r;
+	float ToFloat() const { return fval; }
+	friend sfloat operator*(sfloat _a, sfloat _b) {
+		if (_a.IsInfinite()) return _a;
+		if (_b.IsInfinite()) return _b;
+		if (_a.IsNaN()) return _a;
+		if (_b.IsNaN()) return _b;
+		upck_float a = Unpack(_a);
+		upck_float b = Unpack(_b);
+		upck_float r;
 		r.e = a.e + b.e;
 		Uint64 m = (Uint64)a.m * (Uint64)b.m;
-		while (m >= (1LL<<32)) {
+		while (m >= (1LL<<24)) {
 			m >>= 1;
 			r.e++;
 		}
 		r.m = m;
 		r.sign = (a.sign + b.sign) & 0x1;
-		return r;
+		return Pack(r);
 	}
 	sfloat inverseOf() {
 		return sfloat(1,0,false) / *this;
 	}
-	friend sfloat operator/(sfloat a, sfloat b) {
-		if ((a.type == TYPE_NAN) || (b.type == TYPE_NAN)) {
-			return sfloat(0,0,false,TYPE_NAN);
-		}
-		sfloat r;
-		a.Normalize();
-		b.Normalize();
+	friend sfloat operator/(sfloat _a, sfloat _b) {
+		upck_float a = Unpack(_a);
+		upck_float b = Unpack(_b);
+		upck_float r;
 		if (b.m == 0) {
-			return sfloat(0,0,false,TYPE_INF);
+			sfloat r;
+			r.val = SFLOAT_PVE_INF;
+			return r;
 		}
 
 		r.e = a.e - 32 - b.e;
 		Uint64 rm = (((Uint64)a.m)<<32) / (Uint64)b.m;
-		while (rm >= (1ULL<<32)) {
+		while (rm >= (1ULL<<24)) {
 			rm >>= 1;
 			r.e++;
 		}
 		r.m = rm;
 		r.sign = (a.sign + b.sign) & 0x1;
-		return r;
-	}
-	void Normalize() {
-		if (m) {
-			while (!(m&(1<<31))) {
-				m <<= 1;
-				e--;
-			}
-		}
-		if (!m) {
-			e = -31;
-		}
+		return Pack(r);
 	}
 	void Print() const {
 		//printf("DEBUG: %.15e (%s %u x2^ %hd)\n", ToDouble(), (sign ? "- " : "+ "), m, e);
-		printf("sfloat(%uU,%hd,%s), // %e\n", m, e, sign ? "true" : "false", ToDouble());
+		upck_float f = Unpack(*this);
+		printf("sfloat(%uU,%hd,%s), // [0x%08x] %e\n", f.m, f.e, f.sign ? "true" : "false", val, ToDouble());
 	}
 	friend sfloat operator+(sfloat a, sfloat b) {
-		b.sign = !b.sign;
-		return (a - b);
+		return (a - (-b));
 	}
 	friend sfloat operator+(sfloat a, int b) { return a + sfloat(b); }
 	friend sfloat operator+(int a, sfloat b) { return b+a; }
@@ -179,17 +215,17 @@ public:
 	sfloat &operator*=(sfloat b) { *this = (*this) * b; return *this; }	
 	sfloat &operator/=(sfloat b) { *this = (*this) / b; return *this; }	
 
-	friend sfloat operator-(sfloat a, sfloat b) {
-		if ((a.type == TYPE_NAN) || (b.type == TYPE_NAN)) {
-			return sfloat(0,0,false,TYPE_NAN);
-		}
-		if (!a.m) {
-			b.sign = !b.sign;
-			return b;
-		}
-		if (!b.m) return a;
-		a.Normalize();
-		b.Normalize();
+	friend sfloat operator-(sfloat _a, sfloat _b) {
+		if (_a.IsInfinite()) return _a;
+		if (_b.IsInfinite()) return _b;
+		if (_a.IsNaN()) return _a;
+		if (_b.IsNaN()) return _b;
+		upck_float a = Unpack(_a);
+		upck_float b = Unpack(_b);
+		if (!a.m) return -_b;
+		if (!b.m) return _a;
+		assert(Pack(a) == _a);
+		assert(Pack(b) == _b);
 		// lose some precision so they have matching exponents
 		while (a.e < b.e) {
 			a.m >>= 1;
@@ -199,7 +235,7 @@ public:
 			b.m >>= 1;
 			b.e++;
 		}
-		sfloat r;
+		upck_float r;
 		r.e = a.e;
 		Uint64 m;
 		if (a.m >= b.m) {
@@ -217,17 +253,17 @@ public:
 			}
 			r.sign = !b.sign;
 		}
-		if (m >= (1LL<<32)) {
+		if (m >= (1LL<<24)) {
 			m >>= 1;
 			r.e++;
 		}
 		r.m = (unsigned int)m;
 		r.Normalize();
-		return r;
+		return Pack(r);
 	}
-	sfloat floor() const {
-		// wipe off the fraction bits
-		sfloat r = *this;
+	/** floor */
+	int ToInt32() const {
+		upck_float r = Unpack(*this);
 		if (r.e > 0) {
 			while (r.e > 0) {
 				r.m <<= 1;
@@ -239,8 +275,9 @@ public:
 				r.e++;
 			}
 		}
-		return r;
+		return r.sign ? -r.m : r.m;
 	}
+	Sint64 ToInt64() const { return ToInt32(); } // PISH
 	static sfloat Log(sfloat a);
 	static sfloat Exp(sfloat val);
 	static sfloat Pow(sfloat b, sfloat e) {
@@ -253,15 +290,30 @@ public:
 		return Pow(a, oneThird);
 	}
 	sfloat Abs() const {
-		return sfloat(m, e, false, type);
+		sfloat r = *this;
+		r.val &= 0x7fffffff;
+		return r;
 	}
 
 private:
 	static const sfloat oneThird;
 	static const sfloat inverseFactorials[32];
 	static const sfloat inverses[32];
-	static const sfloat exp_pow2[11];
-	static const sfloat exp_negpow2[10];
+	static const sfloat exp_pow2[8];
+	static const sfloat exp_negpow2[7];
 };
+
+#if 0
+template<int highbitM, int restM, int E>
+struct __sfloat {
+		enum { mantissa = __sfloat< (restM>>30)&1, (restM<<1), E-1>::mantissa,
+					exponent = __sfloat< (restM>>30)&1, (restM<<1), E-1>::exponent };
+};
+template<int restM, int E>
+struct __sfloat<1, restM, E> {
+		enum { mantissa = (1<<31) | restM, exponent = E };
+};
+#define static_sfloat(x) sfloat(__sfloat<(x>>31)&1,x,0>::mantissa, __sfloat<(x>>31)&1,x,0>::exponent, false)
+#endif
 
 #endif /* SFLOAT_H */
