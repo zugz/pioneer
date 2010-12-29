@@ -24,12 +24,12 @@ public:
 	};
 	
 	/* raw ieee float32 binary */
-//	sfloat(Uint32 m): val(m) {}
-//	sfloat(Sint32 m): val(m) {}
+	sfloat(Uint32 m): val(m) {}
+	sfloat(Sint32 m): val(m) {}
 	sfloat(): val(0) {}
 	/* XXX Be careful to avoid using float literals that can't be precisely
 	   represented, like 0.1f for example */
-//	sfloat(float v): fval(v) {}
+	sfloat(float v): fval(v) {}
 	/** As fraction */
 	sfloat(Uint64 numerator, Uint64 denominator) {
 		Uint64 mantissa = (numerator<<32) / denominator;
@@ -169,8 +169,6 @@ public:
 		upck_float b = Unpack(_b);
 		if (!a.m) return -_b;
 		if (!b.m) return _a;
-		assert(Pack(a) == _a);
-		assert(Pack(b) == _b);
 		// lose some precision so they have matching exponents
 		while (a.e < b.e) {
 			a.m >>= 1;
@@ -270,9 +268,9 @@ private:
 
 	static sfloat Pack(const upck_float &f) {
 		sfloat r;
-		if ((!f.m) || ((f.e+150) < 0)) {
+		if ((!f.m) || ((f.e+150) <= 0)) {
 			r.val = 0;
-		} else if (f.e + 150 >= 255) {
+		} else if ((f.e + 150) >= 255) {
 			// infinity
 			r.val = (((Uint32)f.sign)<<31) | (0xff << 23);
 		} else {
