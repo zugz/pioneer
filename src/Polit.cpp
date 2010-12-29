@@ -203,7 +203,7 @@ void GetSysPolitStarSystem(const StarSystem *s, const sfloat human_infestedness,
 	if (a == GOV_INVALID) {
 		if ((sx == 0) && (sy == 0) && (sys_idx == 0)) {
 			a = Polit::GOV_EARTHDEMOC;
-		} else if (human_infestedness > 0) {
+		} else if (human_infestedness > sfloat()) {
 			for (int tries=10; tries--; ) {
 				a = static_cast<GovType>(rand.Int32(GOV_RAND_MIN, GOV_RAND_MAX));
 				if (s_govDesc[a].minTechLevel <= s->m_techlevel) break;

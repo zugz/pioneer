@@ -100,9 +100,9 @@ float Projectile::GetDamage() const
 static void MiningLaserSpawnTastyStuff(Frame *f, const SBody *asteroid, const vector3d &pos)
 {
 	Equip::Type t;
-	if (20*Pi::rng.Sfloat() < asteroid->m_metallicity) {
+	if (sfloat(20,1)*Pi::rng.Sfloat() < asteroid->m_metallicity) {
 		t = Equip::PRECIOUS_METALS;
-	} else if (8*Pi::rng.Sfloat() < asteroid->m_metallicity) {
+	} else if (sfloat(8,1)*Pi::rng.Sfloat() < asteroid->m_metallicity) {
 		t = Equip::METAL_ALLOYS;
 	} else if (Pi::rng.Sfloat() < asteroid->m_metallicity) {
 		t = Equip::METAL_ORE;

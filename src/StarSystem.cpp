@@ -28,12 +28,12 @@ static const struct {
 	char irAbsorption[20]; // percent. 2 micrometer wide bands centred on 1um, 3um, 5um, ..., 39um
 } s_chemStats[CHEM_MAX] = {
 	/* H2 */
-	{ sfloat(14,1), sfloat(20,1), sfloat(449,1), sfloat(0) },
+	{ sfloat(14,1), sfloat(20,1), sfloat(449,1), sfloat() },
 	/* O2 */
 	{ sfloat(54,1), sfloat(90,1), sfloat(6820,1), sfloat(100,1), // IR absorption actually for ozone
           { 0, 10, 7, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
 	/* N2 */
-	{ sfloat(63,1), sfloat(77,1), sfloat(2792,1), sfloat(0) },
+	{ sfloat(63,1), sfloat(77,1), sfloat(2792,1), sfloat() },
 	/* H2O */
 	{ sfloat(27315,100), sfloat(37315,100), sfloat(40657,1), sfloat(100,1),
           { 5, 10, 30, 80, 5, 0, 0, 0, 20, 25, 40, 50, 60, 85, 99, 99, 99, 99, 99, 99 } },
@@ -44,7 +44,7 @@ static const struct {
 	{ sfloat(91,1), sfloat(112,1), sfloat(8180,1), sfloat(24000,1),
           { 0, 10, 0, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
 	/* NH3 */
-	{ sfloat(195,1), sfloat(240,1), sfloat(23350,1), sfloat(0)
+	{ sfloat(195,1), sfloat(240,1), sfloat(23350,1), sfloat()
 	}
 };
 
@@ -318,7 +318,7 @@ static double CalcSurfaceTemp(double star_radius, double star_temp, double objec
  */
 static sfloat calcEnergyPerUnitAreaAtDist(sfloat star_radius, int star_temp, sfloat object_dist)
 {
-	sfloat temp = star_temp * sfloat(1,10000);
+	sfloat temp = sfloat(star_temp,1) * sfloat(1,10000);
 	const sfloat total_solar_emission =
 		temp*temp*temp*temp*star_radius*star_radius;
 	
@@ -337,8 +337,8 @@ static int CalcSurfaceTemp(const SBody *primary, sfloat distToPrimary, sfloat al
 	} else {
 		energy_per_meter2 = calcEnergyPerUnitAreaAtDist(primary->radius, primary->averageTemp, distToPrimary);
 	}
-	const sfloat surface_temp_pow4 = energy_per_meter2*(1-albedo)/(1-greenhouse);
-	return sfloat::Pow(surface_temp_pow4 * 4409673, sfloat(1,-2,false)).ToInt32();
+	const sfloat surface_temp_pow4 = energy_per_meter2*(sfloat(1,1)-albedo)/(sfloat(1,1)-greenhouse);
+	return sfloat::Pow(surface_temp_pow4 * sfloat(4409673,1), sfloat(1,4)).ToInt32();
 }
 
 vector3d Orbit::OrbitalPosAtTime(double t)
@@ -543,7 +543,7 @@ void StarSystem::CustomGetKidsOf(SBody *parent, const CustomSBody *customDef, co
 
 		// perihelion and aphelion (in AUs)
 		kid->orbMin = c->semiMajorAxis - c->eccentricity*c->semiMajorAxis;
-		kid->orbMax = 2*c->semiMajorAxis - kid->orbMin;
+		kid->orbMax = sfloat(2,1)*c->semiMajorAxis - kid->orbMin;
 
 		CustomGetKidsOf(kid, customDef, i, outHumanInfestedness, rand);
 	}
@@ -604,7 +604,7 @@ void StarSystem::MakeBinaryPair(SBody *a, SBody *b, sfloat minDist, MTRand &rand
 	sfloat a0 = b->mass / m;
 	sfloat a1 = a->mass / m;
 	a->eccentricity = rand.NSfloat(3);
-	int mul = 1;
+	sfloat mul = sfloat(1,1);
 
 	do {
 		switch (rand.Int32(3)) {
@@ -614,7 +614,7 @@ void StarSystem::MakeBinaryPair(SBody *a, SBody *b, sfloat minDist, MTRand &rand
 			case 0: a->semiMajorAxis = sfloat(rand.Int32(1,100), 100); break;
 		}
 		a->semiMajorAxis *= mul;
-		mul *= 2;
+		mul *= sfloat(2,1);
 	} while (a->semiMajorAxis < minDist);
 
 	a->orbit.eccentricity = a->eccentricity.ToDouble();
@@ -631,7 +631,7 @@ void StarSystem::MakeBinaryPair(SBody *a, SBody *b, sfloat minDist, MTRand &rand
 	b->orbit.period = a->orbit.period;
 	
 	sfloat orbMin = a->semiMajorAxis - a->eccentricity*a->semiMajorAxis;
-	sfloat orbMax = 2*a->semiMajorAxis - orbMin;
+	sfloat orbMax = sfloat(2,1)*a->semiMajorAxis - orbMin;
 	a->orbMin = orbMin;
 	b->orbMin = orbMin;
 	a->orbMax = orbMax;
@@ -688,8 +688,8 @@ StarSystem::StarSystem(int sector_x, int sector_y, int system_idx)
 		star[0] = NewBody();
 		star[0]->parent = NULL;
 		star[0]->name = s.m_systems[system_idx].name;
-		star[0]->orbMin = 0;
-		star[0]->orbMax = 0;
+		star[0]->orbMin = sfloat();
+		star[0]->orbMax = sfloat();
 		MakeStarOfType(star[0], type, rand);
 		rootBody = star[0];
 		m_numStars = 1;
@@ -716,7 +716,7 @@ StarSystem::StarSystem(int sector_x, int sector_y, int system_idx)
 		centGrav1->children.push_back(star[0]);
 		centGrav1->children.push_back(star[1]);
 try_that_again_guvnah:
-		MakeBinaryPair(star[0], star[1], sfloat(0), rand);
+		MakeBinaryPair(star[0], star[1], sfloat(), rand);
 
 		m_numStars = 2;
 
@@ -729,8 +729,8 @@ try_that_again_guvnah:
 			if (numStars == 3) {
 				star[2] = NewBody();
 				star[2]->name = s.m_systems[system_idx].name+" C";
-				star[2]->orbMin = 0;
-				star[2]->orbMax = 0;
+				star[2]->orbMin = sfloat();
+				star[2]->orbMax = sfloat();
 				MakeStarOfTypeLighterThan(star[2], s.m_systems[system_idx].starType[2],
 					star[0]->mass, rand);
 				centGrav2 = star[2];
@@ -739,7 +739,7 @@ try_that_again_guvnah:
 				centGrav2 = NewBody();
 				centGrav2->type = SBody::TYPE_GRAVPOINT;
 				centGrav2->name = s.m_systems[system_idx].name+" C,D";
-				centGrav2->orbMax = 0;
+				centGrav2->orbMax = sfloat();
 
 				star[2] = NewBody();
 				star[2]->name = s.m_systems[system_idx].name+" C";
@@ -753,7 +753,7 @@ try_that_again_guvnah:
 				MakeStarOfTypeLighterThan(star[3], s.m_systems[system_idx].starType[3],
 					star[2]->mass, rand);
 
-				MakeBinaryPair(star[2], star[3], sfloat(0), rand);
+				MakeBinaryPair(star[2], star[3], sfloat(), rand);
 				centGrav2->mass = star[2]->mass + star[3]->mass;
 				centGrav2->children.push_back(star[2]);
 				centGrav2->children.push_back(star[3]);
@@ -767,7 +767,7 @@ try_that_again_guvnah:
 			centGrav2->parent = superCentGrav;
 			rootBody = superCentGrav;
 			const sfloat minDist = star[0]->orbMax + star[2]->orbMax;
-			MakeBinaryPair(centGrav1, centGrav2, 4*minDist, rand);
+			MakeBinaryPair(centGrav1, centGrav2, sfloat(4,1)*minDist, rand);
 			superCentGrav->children.push_back(centGrav1);
 			superCentGrav->children.push_back(centGrav2);
 
@@ -850,10 +850,10 @@ void StarSystem::Dump()
 sfloat SBody::CalcHillRadius() const
 {
 	if (GetSuperType() <= SUPERTYPE_STAR) {
-		return sfloat(0);
+		return sfloat();
 	} else {
 		// masses in earth masses
-		return semiMajorAxis * (1 - eccentricity) * sfloat::CubeRoot(mass / (3 * parent->GetMassInEarths()));
+		return semiMajorAxis * (sfloat(1,1) - eccentricity) * sfloat::CubeRoot(mass / (sfloat(3,1) * parent->GetMassInEarths()));
 	}
 }
 
@@ -876,8 +876,8 @@ static sfloat mass_from_disk_area(sfloat a, sfloat b, sfloat max)
 	assert(b>=a);
 	assert(a<=max);
 	assert(b<=max);
-	assert(a>=0);
-	sfloat one_over_3max = sfloat(2,1)/(3*max);
+	assert(a>=sfloat());
+	sfloat one_over_3max = sfloat(2,1)/(sfloat(3,1)*max);
 	return (b*b - one_over_3max*b*b*b) -
 		(a*a - one_over_3max*a*a*a);
 }
@@ -891,7 +891,7 @@ static sfloat get_disc_density(SBody *primary, sfloat discMin, sfloat discMax, s
 
 void StarSystem::MakePlanetsAround(SBody *primary, MTRand &rand)
 {
-	sfloat discMin = sfloat(0);
+	sfloat discMin = sfloat();
 	sfloat discMax = sfloat(5000,1);
 	sfloat discDensity;
 
@@ -904,14 +904,14 @@ void StarSystem::MakePlanetsAround(SBody *primary, MTRand &rand)
 		} else {
 			/* correct thing is roche limit, but lets ignore that because
 			 * it depends on body densities and gives some strange results */
-			discMin = 4 * primary->radius * AU_SOL_RADIUS;
+			discMin = sfloat(4,1) * primary->radius * AU_SOL_RADIUS;
 		}
 		if (primary->type == SBody::TYPE_WHITE_DWARF) {
 			// white dwarfs will have started as stars < 8 solar
 			// masses or so, so pick discMax according to that
-			discMax = 100 * rand.NSfloat(2)*sfloat::Sqrt(sfloat(1,2) + sfloat(8,1)*rand.Sfloat());
+			discMax = sfloat(100,1) * rand.NSfloat(2)*sfloat::Sqrt(sfloat(1,2) + sfloat(8,1)*rand.Sfloat());
 		} else {
-			discMax = 100 * rand.NSfloat(2)*sfloat::Sqrt(primary->mass);
+			discMax = sfloat(100,1) * rand.NSfloat(2)*sfloat::Sqrt(primary->mass);
 		}
 		// having limited discMin by bin-separation/fake roche, and
 		// discMax by some relation to star mass, we can now compute
@@ -929,7 +929,7 @@ void StarSystem::MakePlanetsAround(SBody *primary, MTRand &rand)
 		}
 	} else {
 		sfloat primary_rad = primary->radius * AU_EARTH_RADIUS;
-		discMin = 4 * primary_rad;
+		discMin = sfloat(4,1) * primary_rad;
 		/* use hill radius to find max size of moon system. for stars botch it */
 		discMax = MIN(discMax, sfloat(1,20)*primary->CalcHillRadius());
 		
@@ -945,10 +945,10 @@ void StarSystem::MakePlanetsAround(SBody *primary, MTRand &rand)
 
 	while (pos < discMax) {
 		// periapsis, apoapsis = closest, farthest distance in orbit
-		sfloat periapsis = pos + pos*0.5*rand.NSfloat(2);/* + jump */;
+		sfloat periapsis = pos + pos*sfloat(1,2)*rand.NSfloat(2);/* + jump */;
 		sfloat ecc = rand.NSfloat(3);
 		sfloat semiMajorAxis = periapsis / (sfloat(1,1) - ecc);
-		sfloat apoapsis = 2*semiMajorAxis - periapsis;
+		sfloat apoapsis = sfloat(2,1)*semiMajorAxis - periapsis;
 		if (apoapsis > discMax) break;
 
 		sfloat mass;
@@ -1038,9 +1038,9 @@ sfloat SBody::CalcGlobalWarming() const
 	// I(l) = power, l = wavelength, T = temp (kelvin)
 	// l = 0.000069 corresponds to 1um
 	const sfloat oneMicron = sfloat(69,1000000);
-	const sfloat T = sfloat(averageTemp,1);
+	const sfloat T = sfloat(MAX(averageTemp,170),1);
 
-//	printf("Temperature: %f K (%d)\n", T.ToDouble(), averageTemp);
+	//printf("Temperature: %f K (%d)\n", T.ToDouble(), averageTemp);
 	sfloat total;
 	for (int i=0; i<20; i++) {
 		const sfloat l = sfloat(2*i+1,1) * oneMicron;
@@ -1060,11 +1060,11 @@ sfloat SBody::CalcGlobalWarming() const
 		sfloat optical_thickness;
 		for (int gas=0; gas<CHEM_MAX; gas++) {
 			// exponential fog absorption model
-			if (s_chemStats[gas].greenhouseWeighting == sfloat(0)) continue;
-			bandabs += (1 - sfloat::Exp(-s_chemStats[gas].greenhouseWeighting * m_gases[gas]))
+			if (s_chemStats[gas].greenhouseWeighting == sfloat()) continue;
+			bandabs += (sfloat(1,1) - sfloat::Exp(-s_chemStats[gas].greenhouseWeighting * m_gases[gas]))
 					* sfloat(s_chemStats[gas].irAbsorption[band], 100);
 		}
-		bandabs = CLAMP(bandabs, sfloat(0), sfloat(100));
+		bandabs = CLAMP(bandabs, sfloat(), sfloat(100,1));
 //		printf("%.0f um absorption: %f%%\n", (double)(2*band+1), 100.0*(bandabs).ToDouble());
 		greenhouse += total * irEmission[band] * bandabs;
 	}
@@ -1078,7 +1078,7 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 	sfloat minDistToStar, maxDistToStar, averageDistToStar;
 	
 	const SBody *star = FindStarAndTrueOrbitalRange(minDistToStar, maxDistToStar);
-	averageDistToStar = (minDistToStar+maxDistToStar)*sfloat(1ull,2ull);
+	averageDistToStar = (minDistToStar+maxDistToStar)*sfloat(1,2);
 
 	///////////////////////
 	// OK, pick composition
@@ -1092,7 +1092,7 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 	{
 		sfloat invTotal = sfloat(1,1) / (crustCarbon + crustOxygen + crustSilicon +
 			crustLightEarths + crustLightTrans + crustHeavyMetals);
-		if (invTotal == 0) invTotal = sfloat(1,1);
+		if (invTotal == sfloat()) invTotal = sfloat(1,1);
 		crustCarbon *= invTotal;
 		crustOxygen *= invTotal;
 		crustSilicon *= invTotal;
@@ -1112,7 +1112,7 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 	radius = sfloat::CubeRoot(mass);
 
 	for (int i=0; i<CHEM_MAX; i++) {
-		m_gases[i] = m_liquids[i] = m_ices[i] = 0;
+		m_gases[i] = m_liquids[i] = m_ices[i] = sfloat();
 	}
 
 	{
@@ -1138,7 +1138,7 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 		m_gases[CHEM_H2O] = sfloat(2,100);
 		m_gases[CHEM_CO2] = sfloat(4,10000);
 		m_gases[CHEM_CH4] = sfloat(2,1000000);
-		m_gases[CHEM_NH3] = sfloat(0);
+		m_gases[CHEM_NH3] = sfloat();
 
 		// this equation is kosher. It is newton's gravity over the surface area:
 		// pressure = planet_mass * atmosphere_mass / (radius^4)
@@ -1147,13 +1147,13 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 		// atmosphere_mass in earth atmosphere masses
 		// radius in earth radii
 //		printf("Dist to star %.3fAU, star temperature: %dK\n", averageDistToStar.ToDouble(), star->averageTemp);
-		averageTemp = CalcSurfaceTemp(star, averageDistToStar, albedo, sfloat(0));
+		averageTemp = CalcSurfaceTemp(star, averageDistToStar, albedo, sfloat());
 
 		for (int iteration=0; iteration<10; iteration++) {
 			// OK, so when you condense the atmosphere out the pressure falls and
 			// boiling points change, so it must be done in iterations
 			sfloat m = sfloat(1,10); 
-			sfloat atmosphereMass = sfloat(0);
+			sfloat atmosphereMass = sfloat();
 			for (int i=0; i<CHEM_MAX; i++) atmosphereMass += m_gases[i];
 			m_surfacePressure = (mass * atmosphereMass) / (radius*radius*radius*radius);
 
@@ -1275,18 +1275,18 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 
 	averageTemp = bbody_temp;
 #endif
-	if (mass > 317*13) {
+	if (mass > sfloat(317*13,1)) {
 		// more than 13 jupiter masses can fuse deuterium - is a brown dwarf
 		type = SBody::TYPE_BROWN_DWARF;
 		// prevent mass exceeding 65 jupiter masses or so, when it becomes a star
 		// XXX since TYPE_BROWN_DWARF is supertype star, mass is now in
 		// solar masses. what a fucking mess
-		mass = MIN(mass, sfloat(317*65, 1)) / 332998;
-	} else if (mass > 300) {
+		mass = MIN(mass, sfloat(317*65, 1)) / sfloat(332998,1);
+	} else if (mass > sfloat(300,1)) {
 		type = SBody::TYPE_PLANET_LARGE_GAS_GIANT;
-	} else if (mass > 90) {
+	} else if (mass > sfloat(90,1)) {
 		type = SBody::TYPE_PLANET_MEDIUM_GAS_GIANT;
-	} else if (mass > 6) {
+	} else if (mass > sfloat(6,1)) {
 		type = SBody::TYPE_PLANET_SMALL_GAS_GIANT;
 	} else {
 		// terrestrial planets
@@ -1298,7 +1298,7 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 			type = SBody::TYPE_PLANET_DWARF;
 		} else if ((mass < sfloat(2,10)) && (globalwarming < sfloat(5,100))) {
 			type = SBody::TYPE_PLANET_SMALL;
-		} else if (mass < 3) {
+		} else if (mass < sfloat(3,1)) {
 			if ((averageTemp > CELSIUS-60) && (averageTemp < CELSIUS+200)) {
 				// try for life
 				int minTemp = CalcSurfaceTemp(star, maxDistToStar, albedo, globalwarming);
@@ -1310,36 +1310,33 @@ void SBody::PickPlanetType(StarSystem *system, MTRand &rand)
 				    (minTemp > CELSIUS-10) && (minTemp < CELSIUS+60) &&
 				    (maxTemp > CELSIUS-10) && (maxTemp < CELSIUS+60)) {
 					type = SBody::TYPE_PLANET_INDIGENOUS_LIFE;
-					humanActivity *= 4;
+					humanActivity *= sfloat(4,1);
 				} else if 
 						 ((minTemp > CELSIUS-15) && (minTemp < CELSIUS+65) &&
 						 (maxTemp > CELSIUS-15) && (maxTemp < CELSIUS+65)) {
 						 type = SBody::TYPE_PLANET_TERRAFORMED_GOOD;
-						 humanActivity *= 3;
+						 humanActivity *= sfloat(3,1);
 						 }
 				else if
 						 ((minTemp > CELSIUS-25) && (minTemp < CELSIUS+70) &&
 						 (maxTemp > CELSIUS-25) && (maxTemp < CELSIUS+70)) {
 						 type = SBody::TYPE_PLANET_TERRAFORMED_POOR;
-						 humanActivity *= 1;
 						 }
 				else if	
 						((minTemp > CELSIUS-00) && (minTemp < CELSIUS+95) &&
 						 (maxTemp > CELSIUS-00) && (maxTemp < CELSIUS+95)) {
 						 type = SBody::TYPE_PLANET_WATER_THICK_ATMOS;
-						 humanActivity *= 2;
+						 humanActivity *= sfloat(2,1);
 						 }
 				else if	
 						((minTemp > CELSIUS-100) && (minTemp < CELSIUS+00) &&
 						 (maxTemp > CELSIUS-100) && (maxTemp < CELSIUS+00)) {
 						 type = SBody::TYPE_PLANET_WATER;
-						 humanActivity *= 1;
 						 }
 				else if	
 						((minTemp > CELSIUS+30) && (minTemp < CELSIUS+120) &&
 						 (maxTemp > CELSIUS+30) && (maxTemp < CELSIUS+120)) {
 						 type = SBody::TYPE_PLANET_DESERT;
-						 humanActivity *= 1;
 						//bit crap but it has the desired effect 
 						}
 				else
@@ -1388,7 +1385,7 @@ void StarSystem::MakeShortDescription(MTRand &rand)
 	}
 
 	/* Total population is in billions */
-	if (m_totalPop == 0) {
+	if (m_totalPop == sfloat()) {
 		int dist = isqrt(1 + m_loc.sectorX*m_loc.sectorX + m_loc.sectorY*m_loc.sectorY);
 		if (rand.Int32(dist) > 20) {
 			m_shortDesc = "Unexplored system.";
@@ -1432,18 +1429,18 @@ void StarSystem::Populate(bool addSpaceStations)
 	rand.seed(_init, 4);
 
 	/* Various system-wide characteristics */
-	m_humanProx = sfloat(3,1) / isqrt(9 + 10*(m_loc.sectorX*m_loc.sectorX + m_loc.sectorY*m_loc.sectorY));
+	m_humanProx = sfloat(3,1) / sfloat(isqrt(9 + 10*(m_loc.sectorX*m_loc.sectorX + m_loc.sectorY*m_loc.sectorY)),1);
 	m_metallicity = rand.Sfloat();
-	m_techlevel = (m_humanProx*5).ToInt32() + rand.Int32(-2,2);
+	m_techlevel = (m_humanProx*sfloat(5,1)).ToInt32() + rand.Int32(-2,2);
 	m_techlevel = CLAMP(m_techlevel, 1, 5);
 	m_econType = ECON_INDUSTRY;
 	m_industrial = rand.Sfloat();
-	m_agricultural = 0;
+	m_agricultural = sfloat();
 
 	/* system attributes */
-	m_totalPop = sfloat(0);
+	m_totalPop = sfloat();
 	rootBody->PopulateStage1(this, m_totalPop);
-	if (m_totalPop == 0) m_techlevel = 0;
+	if (m_totalPop == sfloat()) m_techlevel = 0;
 	
 //	printf("Trading rates:\n");
 	// So now we have balances of trade of various commodities.
@@ -1487,7 +1484,7 @@ void SBody::PopulateStage1(StarSystem *system, sfloat &outTotalPop)
 	rand.seed(_init, 5);
 
 	m_metallicity = system->m_metallicity * rand.Sfloat();
-	m_population = sfloat(0);
+	m_population = sfloat();
 
 	/* Bad type of planet for settlement */
 	if (
@@ -1507,15 +1504,15 @@ void SBody::PopulateStage1(StarSystem *system, sfloat &outTotalPop)
 		return;
 	}
 
-	m_agricultural = sfloat(0);
+	m_agricultural = sfloat();
 
 	if ((type == SBody::TYPE_PLANET_INDIGENOUS_LIFE) ||
 		(type == SBody::TYPE_PLANET_TERRAFORMED_GOOD)) {
-		m_agricultural = CLAMP(sfloat(1,1) - sfloat(CELSIUS+25-averageTemp, 40), sfloat(0), sfloat(1,1));
-		system->m_agricultural += 2*m_agricultural;
+		m_agricultural = CLAMP(sfloat(1,1) - sfloat(CELSIUS+25-averageTemp, 40), sfloat(), sfloat(1,1));
+		system->m_agricultural += sfloat(2,1)*m_agricultural;
 	} else if (type == SBody::TYPE_PLANET_TERRAFORMED_POOR) {
-		m_agricultural = CLAMP(sfloat(1,1) - sfloat(CELSIUS+30-averageTemp, 50), sfloat(0), sfloat(1,1));
-		system->m_agricultural += 1*m_agricultural;
+		m_agricultural = CLAMP(sfloat(1,1) - sfloat(CELSIUS+30-averageTemp, 50), sfloat(), sfloat(1,1));
+		system->m_agricultural += m_agricultural;
 	} else {
 		// don't bother populating crap planets
 		if (m_metallicity < sfloat(5,10)) return;
@@ -1543,7 +1540,7 @@ void SBody::PopulateStage1(StarSystem *system, sfloat &outTotalPop)
 
 		sfloat affinity = sfloat(1,1);
 		if (type.econType & ECON_AGRICULTURE) {
-			affinity *= 2*m_agricultural;
+			affinity *= sfloat(2,1)*m_agricultural;
 		}
 		if (type.econType & ECON_INDUSTRY) affinity *= system->m_industrial;
 		// make industry after we see if agriculture and mining are viable
@@ -1553,13 +1550,13 @@ void SBody::PopulateStage1(StarSystem *system, sfloat &outTotalPop)
 		affinity *= rand.Sfloat();
 		// producing consumables is wise
 		for (int j=0; j<NUM_CONSUMABLES; j++) {
-			if (i == consumables[j]) affinity *= 2; break;
+			if (i == consumables[j]) affinity *= sfloat(2,1); break;
 		}
-		assert(affinity >= 0);
+		assert(affinity >= sfloat());
 		/* workforce... */
 		m_population += affinity * system->m_humanProx;
 		
-		int howmuch = (affinity * 256).ToInt32();
+		int howmuch = (affinity * sfloat(256,1)).ToInt32();
 
 		system->m_tradeLevel[t] += -2*howmuch;
 		for (int i=0; i<EQUIP_INPUTS; i++) {
@@ -1608,12 +1605,12 @@ void SBody::PopulateAddStations(StarSystem *system)
 	sfloat pop = m_population + rand.Sfloat();
 
 	sfloat orbMax = sfloat(1,4)*this->CalcHillRadius();
-	sfloat orbMin = 4 * this->radius * AU_EARTH_RADIUS;
+	sfloat orbMin = sfloat(4,1) * this->radius * AU_EARTH_RADIUS;
 	if (children.size()) orbMax = MIN(orbMax, sfloat(1,2) * children[0]->orbMin);
 
 	// starports - orbital
 	pop -= rand.Sfloat();
-	if ((orbMin < orbMax) && (pop >= 0)) {
+	if ((orbMin < orbMax) && (pop >= sfloat())) {
 	
 		SBody *sp = system->NewBody();
 		sp->type = SBody::TYPE_STARPORT_ORBITAL;
@@ -1622,12 +1619,12 @@ void SBody::PopulateAddStations(StarSystem *system)
 		sp->parent = this;
 		sp->rotationPeriod = sfloat(1,3600);
 		sp->averageTemp = this->averageTemp;
-		sp->mass = 0;
+		sp->mass = sfloat();
 		sp->name = NameGenerator::Surname(rand) + " Spaceport";
 		/* just always plonk starports in near orbit */
 		sp->semiMajorAxis = orbMin;
-		sp->eccentricity = sfloat(0);
-		sp->axialTilt = sfloat(0);
+		sp->eccentricity = sfloat();
+		sp->axialTilt = sfloat();
 		sp->orbit.eccentricity = 0;
 		sp->orbit.semiMajorAxis = sp->semiMajorAxis.ToDouble()*AU;
 		sp->orbit.period = calc_orbital_period(sp->orbit.semiMajorAxis, this->mass.ToDouble() * EARTH_MASS);
@@ -1638,7 +1635,7 @@ void SBody::PopulateAddStations(StarSystem *system)
 		sp->orbMax = sp->semiMajorAxis;
 
 		pop -= rand.Sfloat();
-		if (pop > 0) {
+		if (pop > sfloat()) {
 			SBody *sp2 = system->NewBody();
 			*sp2 = *sp;
 			sp2->orbit.rotMatrix = matrix4x4d::RotateZMatrix(M_PI);
@@ -1652,7 +1649,7 @@ void SBody::PopulateAddStations(StarSystem *system)
 	int max = 6;
 	while (max-- > 0) {
 		pop -= rand.Sfloat();
-		if (pop < 0) break;
+		if (pop < sfloat()) break;
 
 		SBody *sp = system->NewBody();
 		sp->type = SBody::TYPE_STARPORT_SURFACE;
@@ -1660,7 +1657,7 @@ void SBody::PopulateAddStations(StarSystem *system)
 		sp->tmp = 0;
 		sp->parent = this;
 		sp->averageTemp = this->averageTemp;
-		sp->mass = 0;
+		sp->mass = sfloat();
 		sp->name = NameGenerator::Surname(rand) + " Starport";
 		memset(&sp->orbit, 0, sizeof(Orbit));
 		position_settlement_on_planet(sp);

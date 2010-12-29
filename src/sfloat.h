@@ -3,6 +3,7 @@
 
 #include <SDL_stdinc.h>
 #include <math.h>
+#include <assert.h>
 
 #ifndef CLAMP
 # define CLAMP(a, min, max)      (((a) > (max)) ? (max) : (((a) < (min)) ? (min) : (a)))
@@ -11,68 +12,24 @@
 #define SFLOAT_PVE_INF 0x7f800000
 #define SFLOAT_NVE_INF 0xff800000
 
+/**
+ * A quick and dirty software floating point implementation. If you want something good look at SoftFloat
+ * or some other decent implementation.
+ */
 class sfloat {
 public:
 	union {
 		Uint32 val;
 		float fval;
 	};
-
-	struct upck_float {
-		Uint32 m; // mantissa
-		Sint16 e; // exponent
-		Uint8 sign;
-		void Normalize() {
-			if (m) {
-				while (m >= (1LL<<24)) {
-					m >>= 1;
-					e++;
-				}
-				while (!(m&(1<<23))) {
-					m <<= 1;
-					e--;
-				}
-			}
-			if (!m) {
-				e = 0;
-			}
-		}
-	};
-
-private:
-	static sfloat Pack(const upck_float &f) {
-		sfloat r;
-		if ((!f.m) || ((f.e+150) < 0)) {
-			r.val = 0;
-		} else if (f.e + 150 >= 255) {
-			// infinity
-			r.val = (((Uint32)f.sign)<<31) | (0xff << 23);
-		} else {
-			r.val = (((Uint32)f.sign)<<31) | (((f.e+150)&0xff)<<23) | (f.m & 0x7fffff);
-		}
-		return r;
-	}
-	static upck_float Unpack(sfloat v) {
-		upck_float f;
-		assert(!v.IsInfinite());
-		assert(!v.IsNaN());
-		if (!v.val) {
-			f.m = f.e = f.sign = 0;
-		} else {
-			f.m = (v.val & 0x7fffff) | 0x800000;
-			f.e = (signed)((v.val>>23)&0xff)-150;
-			f.sign = (v.val>>31) & 1;
-		}
-		return f;
-	}
-public:
-	bool IsInfinite() const {
-		return (val == 0xff800000) || (val == 0x7f800000);
-	}
-	bool IsNaN() const {
-		return (((val >> 23) & 0xff) == 0xff) && (val & 0x7fffff);
-	}
-
+	
+	/* raw ieee float32 binary */
+//	sfloat(Uint32 m): val(m) {}
+//	sfloat(Sint32 m): val(m) {}
+	sfloat(): val(0) {}
+	/* XXX Be careful to avoid using float literals that can't be precisely
+	   represented, like 0.1f for example */
+//	sfloat(float v): fval(v) {}
 	/** As fraction */
 	sfloat(Uint64 numerator, Uint64 denominator) {
 		Uint64 mantissa = (numerator<<32) / denominator;
@@ -87,8 +44,6 @@ public:
 		f.Normalize();
 		*this = Pack(f);
 	}
-
-	/** Native */
 	sfloat(unsigned int m, short e, bool sign) {
 		upck_float f;
 		f.m = m;
@@ -97,15 +52,14 @@ public:
 		f.Normalize();
 		*this = Pack(f);
 	}
-	sfloat(int m) {
-		upck_float f;
-		f.m = abs(m);
-		f.e = 0;
-		f.sign = (m>>31)&1;
-		f.Normalize();
-		*this = Pack(f);
+
+
+	bool IsInfinite() const {
+		return (val == 0xff800000) || (val == 0x7f800000);
 	}
-	sfloat(): val(0) {}
+	bool IsNaN() const {
+		return (((val >> 23) & 0xff) == 0xff) && (val & 0x7fffff);
+	}
 
 	friend bool operator==(sfloat a, sfloat b) {
 		return a.val == b.val;
@@ -201,15 +155,6 @@ public:
 	friend sfloat operator+(sfloat a, sfloat b) {
 		return (a - (-b));
 	}
-	friend sfloat operator+(sfloat a, int b) { return a + sfloat(b); }
-	friend sfloat operator+(int a, sfloat b) { return b+a; }
-	friend sfloat operator-(sfloat a, int b) { return a - sfloat(b); }
-	friend sfloat operator-(int a, sfloat b) { return sfloat(a) - b; }
-	friend sfloat operator*(sfloat a, int b) { return a * sfloat(b); }
-	friend sfloat operator*(int a, sfloat b) { return b*a; }
-	sfloat &operator+=(int b) { *this = (*this) + b; return *this; }
-	sfloat &operator-=(int b) { *this = (*this) - b; return *this; }
-	sfloat &operator*=(int b) { *this = (*this) * b; return *this; }
 	sfloat &operator-=(sfloat b) { *this = (*this) - b; return *this; }	
 	sfloat &operator+=(sfloat b) { *this = (*this) + b; return *this; }	
 	sfloat &operator*=(sfloat b) { *this = (*this) * b; return *this; }	
@@ -301,6 +246,53 @@ private:
 	static const sfloat inverses[32];
 	static const sfloat exp_pow2[8];
 	static const sfloat exp_negpow2[7];
+	
+	struct upck_float {
+		Uint32 m; // mantissa
+		Sint16 e; // exponent
+		Uint8 sign;
+		void Normalize() {
+			if (m) {
+				while (m >= (1LL<<24)) {
+					m >>= 1;
+					e++;
+				}
+				while (!(m&(1<<23))) {
+					m <<= 1;
+					e--;
+				}
+			}
+			if (!m) {
+				e = 0;
+			}
+		}
+	};
+
+	static sfloat Pack(const upck_float &f) {
+		sfloat r;
+		if ((!f.m) || ((f.e+150) < 0)) {
+			r.val = 0;
+		} else if (f.e + 150 >= 255) {
+			// infinity
+			r.val = (((Uint32)f.sign)<<31) | (0xff << 23);
+		} else {
+			r.val = (((Uint32)f.sign)<<31) | (((f.e+150)&0xff)<<23) | (f.m & 0x7fffff);
+		}
+		return r;
+	}
+	static upck_float Unpack(sfloat v) {
+		upck_float f;
+		assert(!v.IsInfinite());
+		assert(!v.IsNaN());
+		if (!v.val) {
+			f.m = f.e = f.sign = 0;
+		} else {
+			f.m = (v.val & 0x7fffff) | 0x800000;
+			f.e = (signed)((v.val>>23)&0xff)-150;
+			f.sign = (v.val>>31) & 1;
+		}
+		return f;
+	}
 };
 
 #if 0

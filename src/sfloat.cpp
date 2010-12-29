@@ -46,7 +46,7 @@ sfloat sfloat::Exp(sfloat p)
 	// do e^(+ve power of two) bits
 	if (fraction > sfloat(1,0,false)) {
 		int intpart = fraction.ToInt32();
-		fraction -= sfloat(intpart);
+		fraction -= sfloat(intpart,1);
 		for(int i=8; i>=0; i--) {
 			if (intpart & (1<<i)) {
 				rhigh *= exp_pow2[i];
@@ -56,7 +56,7 @@ sfloat sfloat::Exp(sfloat p)
 	// do -e^(+ve power of two) bits
 	if (fraction < sfloat(1,0,true)) {
 		int intpart = -fraction.ToInt32();
-		fraction += sfloat(intpart);
+		fraction += sfloat(intpart,1);
 		for(int i=7; i>=0; i--) {
 			if (intpart & (1<<i)) {
 				rhigh *= exp_negpow2[i];
