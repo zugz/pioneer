@@ -19,6 +19,25 @@ void SystemInfoView::OnBodySelected(SBody *b)
 {
 	m_bodySelected = b;
 
+	{
+		printf("Average surface temp %dK, pressure %f bar\n", b->averageTemp, b->m_surfacePressure.ToDouble());
+		printf("State	H2	O2	N2	H2O	CO2	CH4	NH3");
+		printf("\nGas");
+		for (int i=0; i<CHEM_MAX; i++) { printf("\t%.3f", b->m_gases[i].ToDouble()); }
+		printf("\nLiquid");
+		for (int i=0; i<CHEM_MAX; i++) { printf("\t%.3f", b->m_liquids[i].ToDouble()); }
+		printf("\nIces");
+		for (int i=0; i<CHEM_MAX; i++) { printf("\t%.3f", b->m_ices[i].ToDouble()); }
+		printf("\nCrust: C %f, O %f, Si %f, Light Earths %f, Light Trans %f, Heavy metals %f\n",
+				b->crustCarbon.ToDouble(),
+				b->crustOxygen.ToDouble(),
+				b->crustSilicon.ToDouble(),
+				b->crustLightEarths.ToDouble(),
+				b->crustLightTrans.ToDouble(),
+				b->crustHeavyMetals.ToDouble());
+		printf("\n");
+	}
+
 	SBodyPath path;
 	m_system->GetPathOf(b, &path);
 	Pi::player->SetHyperspaceTarget(&path);
