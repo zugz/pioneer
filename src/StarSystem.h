@@ -1,6 +1,8 @@
 #ifndef _STARSYSTEM_H
 #define _STARSYSTEM_H
 
+#error don't use the new-sysgen branch. it is a bad idea and stupidly over-ambitious
+
 #include "libs.h"
 #include "EquipType.h"
 #include "Polit.h"
