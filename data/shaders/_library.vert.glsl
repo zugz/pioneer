@@ -35,8 +35,27 @@ float intensityOfOccultedLight(vec3 lightDir, vec3 v, vec3 occultCentre, float s
 	// projectedPoint covered by the disc of radius srad around occultCentre.
 	float dist = length(projectedPoint - occultCentre);
 
-	return 1.0 - mix(0.0, maxOcclusion,
-			clamp(
-				( srad+lrad-dist ) / ( srad+lrad - abs(srad-lrad) ),
-				0.0, 1.0));
+	float distn = dist/lrad;
+	float sradn = srad/lrad;
+	// cosine rule!
+	float xl = (distn*distn + 1 - sradn*sradn) / (2.0*distn);
+	float xs = distn - xl;
+
+	// Calculate properly: this does lead to visible improvements in eclipse appearance, but it also leads to some
+	// visual artifacts at the edge of an eclipse, which I think are due to rounding errors. Also, it seems to be
+	// pushing the limits of allowed complexity for shader code.
+	float occlusion = clamp(
+			((acos(xl) - (xl)*sqrt(1 - xl*xl)) +
+			(sradn*sradn*acos(xs/sradn) - xs*sqrt(sradn*sradn - xs*xs)))/pi,
+			0.0, maxOcclusion);
+	if (isnan(occlusion))
+		return 0.0;
+	return 1.0 - occlusion;
+
+	// linear interpolation version:
+	//return 1.0 - mix(0.0, maxOcclusion,
+			//clamp(
+				//( srad+lrad-dist ) / ( srad+lrad - abs(srad-lrad) ),
+				//0.0, 1.0));
+
 }

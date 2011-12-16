@@ -29,7 +29,7 @@ void main(void)
 		if (lightDiscRadii[i] < 0.0)
 			gl_TexCoord[2][i] = 1.0;
 		else
-			gl_TexCoord[2][i] = clamp(d / (2*lightDiscRadii[i]) + 0.5, 0.0, 1.0);
+			gl_TexCoord[2][i] = clamp((asin(d) + d*sqrt(1.0-d*d)/2.0)/pi + 0.5, 0.0, 1.0);
 		if (i == occultedLight)
 			gl_TexCoord[2][i]*=intensityOfOccultedLight(lightDir, v, occultCentre, srad, lrad, maxOcclusion);
 	}

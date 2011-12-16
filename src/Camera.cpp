@@ -274,7 +274,7 @@ void Camera::RenderBody(BodyAttrs *attrs) {
 						// centre of b2 relative to the centre of b. The upshot is that from a point on b, with
 						// normalised projected position p, the picture is of a disc of radius lrad being occulted by a
 						// disc of radius srad centred at projectedCentre-p. To determine the light intensity at p, we
-						// then just need to estimate the proportion of the light disc being occulted.
+						// then just need to calculate the proportion of the light disc being occulted.
 						const double srad = b2Radius/bRadius;
 						const double lrad = (lightRadius/bLightPos.Length())*perpDist/bRadius;
 						if (srad / lrad < 0.01) {
@@ -296,24 +296,33 @@ void Camera::RenderBody(BodyAttrs *attrs) {
 						}
 					}
 					else {
-						// b is a model; we light these uniformly, so just need to calculate the intensity:
-						const double srad = b2Radius;
+						// b is a model; we light these uniformly, so just need to calculate the intensity.
+						// We scale such that the light disc radius (lrad) is 1.
 						const double lrad = (lightRadius/bLightPos.Length())*perpDist;
-						const double prdist = ( b2pos - perpDist*lightDir ).Length();
-						if (prdist < srad + lrad) {
-							float intensity = 1.0;
-							if (prdist < abs(srad-lrad))
-								if (srad > lrad)
+						const double srad = b2Radius/lrad;
+						const double prdist = ( b2pos - perpDist*lightDir ).Length()/lrad;
+						if (prdist < srad + 1) {
+							double intensity = 1.0;
+							if (prdist < abs(srad-1))
+								if (srad > 1)
 									// umbra
 									intensity = 0.0;
 								else
 									// penumbra
-									intensity = 1.0 - (srad*srad) / (lrad*lrad);
-							else
-								// antumbra - just linearly interpolate (TODO:better?)
-								intensity = 1.0 - ((srad+lrad-prdist)*(
-											(srad > lrad) ? 1 : (srad*srad) / (lrad*lrad))) /
-									(srad+lrad-abs(srad-lrad));
+									intensity = 1.0 - (srad*srad);
+							else {
+								// antumbra
+								const double xl = (prdist*prdist + 1 - srad*srad) / (2.0*prdist);
+								const double xs = prdist-xl;
+								intensity = (1.0L - (
+										(acos(xl) - xl*sqrt(1.0L - xl*xl)) +
+										(srad*srad*acos(xs/srad) - xs*sqrt(srad*srad - xs*xs)))/M_PIl); 
+								if (isnan(intensity))
+									// due to rounding errors, we sometimes square root negative numbers when the
+									// eclipse is near-complete.
+									intensity = 0.0;
+								intensity = (intensity > 1.0) ? 1.0 : ((intensity < 0.0) ? 0.0 : intensity);
+							}
 							attrs->lightIntensities[i] *= intensity;
 						}
 					}

@@ -1,3 +1,5 @@
+#define pi 3.141592653589793238462643383279
+
 void DirectionalLight(in int i,
                        in vec3 normal,
                        inout vec4 ambient,
