@@ -68,3 +68,44 @@ float findSphereEyeRayEntryDistance(in vec3 sphereCenter, in vec3 eyeTo, in floa
 	return entryDist;
 }
 
+
+float intensityOfOccultedLight(vec3 lightDir, vec3 v, vec3 occultCentre, float srad, float lrad, float maxOcclusion) {
+	vec3 projectedPoint = v - dot(lightDir,v)*lightDir;
+	// By our assumptions, the proportion of light blocked at this point by
+	// this sphere is the proportion of the disc of radius lrad around
+	// projectedPoint covered by the disc of radius srad around occultCentre.
+	float dist = length(projectedPoint - occultCentre);
+
+	return 1.0 - mix(0.0, maxOcclusion,
+			clamp(
+				( srad+lrad-dist ) / ( srad+lrad - abs(srad-lrad) ),
+				0.0, 1.0));
+}
+
+float intensityOfLightAtPoint(vec3 v, vec3 lightDir, float lightDiscRadius,
+		bool eclipse, vec3 occultCentre, float srad, float lrad, float maxOcclusion) {
+
+	// Handle self-shadowing, i.e. "night":
+	// d = dot(lightDir,t) where t is the unique point on the unit sphere whose tangent plane
+	// contains v, is in the plane of lightDir and d, and is towards the light.
+	float lenInvSq = 1.0/dot(v,v);
+	float perp = dot(lightDir,v);
+	float d = perp*lenInvSq + sqrt((1-lenInvSq)*(1-(perp*perp*lenInvSq)));
+	float intensity = 1.0;
+	if (lightDiscRadius > 0.0)
+		intensity = clamp(d / (2*lightDiscRadius) + 0.5, 0.0, 1.0);
+
+	// Handle eclipse if there is one:
+	if (eclipse) {
+		// By our assumptions, the proportion of light blocked at this point by
+		// this sphere is the proportion of the disc of radius lrad around
+		// projectedPoint covered by the disc of radius srad around occultCentre.
+		vec3 projectedPoint = v - perp*lightDir;
+		float dist = length(projectedPoint - occultCentre);
+		intensity *= (1.0 - mix(0.0, maxOcclusion,
+					clamp(
+						( srad+lrad-dist ) / ( srad+lrad - abs(srad-lrad) ),
+						0.0, 1.0)));
+	}
+	return intensity;
+}
