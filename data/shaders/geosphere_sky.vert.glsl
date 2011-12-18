@@ -59,16 +59,16 @@ void main(void)
 		vec3 lightDir = normalize(vec3(gl_LightSource[i].position) - geosphereCenter);
 
 		// estimate integral of scattering along the eyeline
-		const int SN = 2;
+		const int SN = 6;
 		vec3 d = (b-a)/float(SN);
 		vec3 scatterInt = vec3(0.0,0.0,0.0);
-		float atmosDensity, lastAtmosDensity, lightIntensity, lightAtmosInt;
+		float atmosDensity, lastAtmosDensity, lightAtmosInt;
 		float scatAtmosInt = 0.0;
 		for (int j=0; j<SN+1; j++) {
 			vec3 p = a+j*d;
 			{
 				// estimate integral of density
-				const int lSN=6;
+				const int lSN=3;
 				float lb = -dot(p,lightDir);
 				vec3 ld = ((lb + sqrt( lb*lb - dot(p,p) + 1 ))/float(lSN))*lightDir;
 				lightAtmosInt = surfaceDensity*exp(-ADF*(length(p)-0.985));
@@ -87,17 +87,15 @@ void main(void)
 				scatAtmosInt += (lastAtmosDensity + atmosDensity) *
 					length(d)*geosphereAtmosTopRad/2.0;
 
-			lightIntensity = intensityOfLightAtPoint(p*geosphereRadius/geosphereAtmosTopRad,
-					lightDir, lightDiscRadii[i], occultedLight == i, occultCentre, srad,
-					lrad, maxOcclusion);
-			//lightIntensity = 1.0;
-
 			scatterInt += exp(-(lightAtmosInt+scatAtmosInt)*ffac) *
-				atmosDensity * lightIntensity *
+				atmosDensity *
 				( (j==0||j==SN) ? 1.0 :
 				  (j==1||j==3||j==5) ? 4.0 :
 				  2.0 );
 		}
+		//float lightIntensity = intensityOfLightAtPoint(a+(d*(SN/2))*geosphereRadius/geosphereAtmosTopRad,
+				//lightDir, lightDiscRadii[i], occultedLight == i, occultCentre, srad,
+				//lrad, maxOcclusion);
 		scatterInt *= ffac*gl_LightSource[i].diffuse*length(d)*geosphereAtmosTopRad/3.0;
 		for (int c=0; c<3; c++)
 			gl_TexCoord[2][c] += scatterInt[c];
