@@ -50,70 +50,56 @@ void main(void)
 	vec3 a = (skyNear * eyedir - geosphereCenter) / geosphereAtmosTopRad;
 	vec3 b = (skyFar * eyedir - geosphereCenter) / geosphereAtmosTopRad;
 	vec3 ffac;
-	for (int c=0; c<3; c++) {
-		float freq = 1.0/(1.0+float(2-c)/6.0);
-		ffac[c] = freq*freq*freq*freq;
-	}
+	for (int c=0; c<3; c++)
+		ffac[c] = pow(1.0+float(2-c)/6.0,-4);
 	const float ADF = 500.0;
 	float surfaceDensity = atmosColor.w*geosphereAtmosFogDensity;
+	gl_TexCoord[2] = vec4(0.0,0.0,0.0,1.0);
 	for (int i=0; i<NUM_LIGHTS; ++i) {
 		vec3 lightDir = normalize(vec3(gl_LightSource[i].position) - geosphereCenter);
 
 		// estimate integral of scattering along the eyeline
 		const int SN = 2;
 		vec3 d = (b-a)/float(SN);
-		float atmosSamples[SN+1];
-		float lightIntensity[SN+1];
-		for (int j=0; j<SN+1; j++) {
-			vec3 p = a+j*d;
-			atmosSamples[j] = surfaceDensity*exp(-ADF*(length(p)-0.985));
-			lightIntensity[j] = intensityOfLightAtPoint(p*geosphereRadius/geosphereAtmosTopRad,
-					lightDir, lightDiscRadii[i], occultedLight == i, occultCentre, srad,
-					lrad, maxOcclusion);
-		}
-
 		vec3 scatterInt = vec3(0.0,0.0,0.0);
+		float atmosDensity, lastAtmosDensity, lightIntensity, lightAtmosInt;
+		float scatAtmosInt = 0.0;
 		for (int j=0; j<SN+1; j++) {
 			vec3 p = a+j*d;
-			float lightAtmosInt = 0.0;
 			{
 				// estimate integral of density
-				const int lSN=2;
+				const int lSN=6;
 				float lb = -dot(p,lightDir);
 				vec3 ld = ((lb + sqrt( lb*lb - dot(p,p) + 1 ))/float(lSN))*lightDir;
-				for (int k=0; k<lSN+1; k++) {
+				lightAtmosInt = surfaceDensity*exp(-ADF*(length(p)-0.985));
+				for (int k=1; k<lSN; k++) {
 					vec3 lp = p + k*ld;
 					// 0.985 == 1/ATMOSPHERE_RADIUS
-					lightAtmosInt += surfaceDensity*exp(-ADF*(length(lp)-0.985)) *
-						( (k==0||k==lSN) ? 1.0 :
-						  (k==1||k==3||k==5) ? 4.0 :
-						  2.0 );
+					lightAtmosInt += 2.0*surfaceDensity*exp(-ADF*(length(lp)-0.985));
 				}
-				lightAtmosInt *= length(ld)*geosphereAtmosTopRad/3.0;
+				lightAtmosInt *= length(ld)*geosphereAtmosTopRad/2.0;
 			}
 
-			float scatAtmosInt = 0.0;
-			if (j>0) {
-				scatAtmosInt += atmosSamples[0];
-				for (int k=1; k<j; k++)
-					scatAtmosInt += atmosSamples[k] * 2.0;
-				scatAtmosInt += atmosSamples[j];
-				scatAtmosInt *= length(d)*geosphereAtmosTopRad/2.0;
-			}
+			lastAtmosDensity = atmosDensity;
+			atmosDensity = surfaceDensity*exp(-ADF*(length(p)-0.985));
 
-			for (int c=0; c<3; c++) {
-				float lightFogFactor = exp(-lightAtmosInt*ffac[c]);
-				float scatFogFactor = exp(-scatAtmosInt*ffac[c]);
-				scatterInt[c] += lightFogFactor * scatFogFactor * ffac[c] * gl_LightSource[i].diffuse[c] *
-					atmosSamples[j] * lightIntensity[j] *
-					( (j==0||j==SN) ? 1.0 :
-					  (j==1||j==3||j==5) ? 4.0 :
-					  2.0 );
-			}
+			if (j>0)
+				scatAtmosInt += (lastAtmosDensity + atmosDensity) *
+					length(d)*geosphereAtmosTopRad/2.0;
+
+			lightIntensity = intensityOfLightAtPoint(p*geosphereRadius/geosphereAtmosTopRad,
+					lightDir, lightDiscRadii[i], occultedLight == i, occultCentre, srad,
+					lrad, maxOcclusion);
+			//lightIntensity = 1.0;
+
+			scatterInt += exp(-(lightAtmosInt+scatAtmosInt)*ffac) *
+				atmosDensity * lightIntensity *
+				( (j==0||j==SN) ? 1.0 :
+				  (j==1||j==3||j==5) ? 4.0 :
+				  2.0 );
 		}
-		for (int c=0; c<3; c++) {
-			scatterInt[c] *= length(d)*geosphereAtmosTopRad/3.0;
-			gl_TexCoord[2][c] = scatterInt[c];
-		}
+		scatterInt *= ffac*gl_LightSource[i].diffuse*length(d)*geosphereAtmosTopRad/3.0;
+		for (int c=0; c<3; c++)
+			gl_TexCoord[2][c] += scatterInt[c];
 	}
 }
