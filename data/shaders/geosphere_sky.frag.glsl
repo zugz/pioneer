@@ -41,7 +41,7 @@ void main(void) {
 	for (int i=0; i<NUM_LIGHTS; ++i) {
 		vec3 lightDir = normalize(vec3(gl_LightSource[i].position) - geosphereCenter);
 		for (int c=0; c<3; c++)
-			atmosDiffuse[c] += gl_TexCoord[2][c] * (1.0+dot(eyedir,lightDir)*dot(eyedir,lightDir));
+			atmosDiffuse[c] += gl_TexCoord[2][c] * (1.0+dot(eyedir,lightDir)*dot(eyedir,lightDir))*(3.0/16*3.14);
 	}
 	atmosDiffuse.a = 1.0;
 	//float sun = max(0.0, dot(normalize(eyepos),normalize(vec3(gl_LightSource[0].position))));

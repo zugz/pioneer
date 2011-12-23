@@ -1272,8 +1272,8 @@ static const float g_ambient[4] = { 0, 0, 0, 1.0 };
 
 static void DrawAtmosphereSurface(const vector3d &campos, float rad)
 {
-	const int LAT_SEGS = 20;
-	const int LONG_SEGS = 20;
+	const int LAT_SEGS = 40;
+	const int LONG_SEGS = 40;
 	vector3d yaxis = campos.Normalized();
 	vector3d zaxis = vector3d(1.0,0.0,0.0).Cross(yaxis).Normalized();
 	vector3d xaxis = yaxis.Cross(zaxis);
