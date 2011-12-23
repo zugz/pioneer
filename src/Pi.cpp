@@ -97,6 +97,7 @@ LuaEventQueue<Ship,Body> *Pi::luaOnShipLanded;
 LuaEventQueue<Ship,Body> *Pi::luaOnShipTakeOff;
 LuaEventQueue<Ship,const char *> *Pi::luaOnShipAlertChanged;
 LuaEventQueue<Ship,CargoBody> *Pi::luaOnJettison;
+LuaEventQueue<Body,const char *> *Pi::luaOnCargoUnload;
 LuaEventQueue<Ship,const char *> *Pi::luaOnAICompleted;
 LuaEventQueue<SpaceStation> *Pi::luaOnCreateBB;
 LuaEventQueue<SpaceStation> *Pi::luaOnUpdateBB;
@@ -228,6 +229,7 @@ static void LuaInit()
 	Pi::luaOnShipTakeOff = new LuaEventQueue<Ship,Body>("onShipTakeOff");
 	Pi::luaOnShipAlertChanged = new LuaEventQueue<Ship,const char *>("onShipAlertChanged");
 	Pi::luaOnJettison = new LuaEventQueue<Ship,CargoBody>("onJettison");
+	Pi::luaOnCargoUnload = new LuaEventQueue<Body,const char*>("onCargoUnload");
 	Pi::luaOnAICompleted = new LuaEventQueue<Ship,const char *>("onAICompleted");
 	Pi::luaOnCreateBB = new LuaEventQueue<SpaceStation>("onCreateBB");
 	Pi::luaOnUpdateBB = new LuaEventQueue<SpaceStation>("onUpdateBB");
@@ -249,6 +251,7 @@ static void LuaInit()
 	Pi::luaOnShipUndocked->RegisterEventQueue();
 	Pi::luaOnShipAlertChanged->RegisterEventQueue();
 	Pi::luaOnJettison->RegisterEventQueue();
+	Pi::luaOnCargoUnload->RegisterEventQueue();
 	Pi::luaOnAICompleted->RegisterEventQueue();
 	Pi::luaOnCreateBB->RegisterEventQueue();
 	Pi::luaOnUpdateBB->RegisterEventQueue();
@@ -290,6 +293,7 @@ static void LuaUninit() {
 	delete Pi::luaOnShipTakeOff;
 	delete Pi::luaOnShipAlertChanged;
 	delete Pi::luaOnJettison;
+	delete Pi::luaOnCargoUnload;
 	delete Pi::luaOnAICompleted;
 	delete Pi::luaOnCreateBB;
 	delete Pi::luaOnUpdateBB;
@@ -316,6 +320,7 @@ static void LuaInitGame() {
 	Pi::luaOnShipTakeOff->ClearEvents();
 	Pi::luaOnShipAlertChanged->ClearEvents();
 	Pi::luaOnJettison->ClearEvents();
+	Pi::luaOnCargoUnload->ClearEvents();
 	Pi::luaOnAICompleted->ClearEvents();
 	Pi::luaOnCreateBB->ClearEvents();
 	Pi::luaOnUpdateBB->ClearEvents();
@@ -668,6 +673,8 @@ void Pi::HandleEvents()
 				if ((KeyState(SDLK_LCTRL) || (KeyState(SDLK_RCTRL)))) {
 					switch (event.key.keysym.sym) {
 						case SDLK_q: // Quit
+							if (Pi::game)
+								Pi::EndGame();
 							Pi::Quit();
 							break;
 						case SDLK_s: // Toggle Shaders
@@ -826,7 +833,7 @@ void Pi::HandleEvents()
 	}
 }
 
-static void draw_intro(Background::Starfield *starfield, Background::MilkyWay *milkyway, float _time)
+static void draw_intro(Background::Container *background, float _time)
 {
 	float lightCol[4] = { 1,1,1,0 };
 	float lightDir[4] = { 0,1,1,0 };
@@ -859,14 +866,10 @@ static void draw_intro(Background::Starfield *starfield, Background::MilkyWay *m
 	equipment.Add(Equip::RADAR_MAPPER, 1);
 	equipment.Add(Equip::MISSILE_NAVAL, 4);
 
-	glPushMatrix();
-	glRotatef(_time*10, 1, 0, 0);
-	glPushMatrix();
-	glRotatef(40.0, 1.0, 2.0, 3.0);
-	milkyway->Draw();
-	glPopMatrix();
-	starfield->Draw();
-	glPopMatrix();
+	// XXX all this stuff will be gone when intro uses a Camera
+	// rotate background by time, and a bit extra Z so it's not so flat
+	matrix4x4d brot = matrix4x4d::RotateXMatrix(-0.25*_time) * matrix4x4d::RotateZMatrix(0.6);
+	background->Draw(brot);
 	
 	glPushAttrib(GL_ALL_ATTRIB_BITS);
 
@@ -1003,13 +1006,13 @@ void Pi::HandleMenuKey(int n)
 
 		case 0: // Earth start point
 		{
-			game = new Game(SystemPath(0,0,0,0,6));  // Mexico City, Earth
+			game = new Game(SystemPath(0,0,0,0,9));  // Los Angeles, Earth
 			break;
 		}
 
 		case 1: // Epsilon Eridani start point
 		{
-			game = new Game(SystemPath(1,0,-1,0,5));  // New Hope, New Hope
+			game = new Game(SystemPath(1,0,-1,0,4));  // New Hope, New Hope
 			break;
 		}
 
@@ -1102,8 +1105,7 @@ void Pi::HandleMenuKey(int n)
 
 void Pi::Start()
 {
-	Background::Starfield *starfield = new Background::Starfield();
-	Background::MilkyWay *milkyway = new Background::MilkyWay();
+	Background::Container *background = new Background::Container(UNIVERSE_SEED);
 
 	Gui::Fixed *menu = new Gui::Fixed(float(Gui::Screen::GetWidth()), float(Gui::Screen::GetHeight()));
 	Gui::Screen::AddBaseWidget(menu, 0, 0);
@@ -1165,7 +1167,7 @@ void Pi::Start()
 
 		Pi::SetMouseGrab(false);
 
-		draw_intro(starfield, milkyway, _time);
+		draw_intro(background, _time);
 		Render::PostProcess();
 		Gui::Draw();
 		Render::SwapBuffers();
@@ -1178,8 +1180,7 @@ void Pi::Start()
 	
 	Gui::Screen::RemoveBaseWidget(menu);
 	delete menu;
-	delete starfield;
-	delete milkyway;
+	delete background;
 
 	// game is set by HandleMenuKey if any game-starting option (start or
 	// load) is selected
