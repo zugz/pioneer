@@ -9,7 +9,7 @@ uniform float geosphereAtmosFogDensity;
 uniform float geosphereRadius;
 uniform vec4 lightDiscRadii;
 uniform int occultedLight;
-uniform vec3 occultCentre;
+uniform vec4 occultCentre;
 uniform float srad;
 uniform float lrad;
 uniform float maxOcclusion;
@@ -56,9 +56,13 @@ void main(void)
 
 	const float ADF = 500.0;
 	float surfaceDensity = atmosColor.w*geosphereAtmosFogDensity;
+
+	// TODO: take into account surface density, and other characteristics of
+	// the atmosphere.
 	vec4 c = vec4(5.8,13.5,33.1,0)*geosphereScale*geosphereRadius/1000000.0;
-	//for (int c=0; c<3; c++)
-	//ffac[c] = pow(1.0+float(2-c)/6.0,-4);
+
+	//const float coeffs[5] = {-0.0631,-0.418,8.47,-15.4,10.5};
+	//const float sumCoeffs = -0.0631-0.418+8.47-15.4+10.5;
 	const float silly = 2.0*exp(-0.0631-0.418+8.47-15.4+10.5)/ADF;
 	const int SN = 8;
 	vec4 d = (b-a)/float(SN);
@@ -69,8 +73,6 @@ void main(void)
 	for (int i=0; i<NUM_LIGHTS; ++i)
 		lightDir[i] = normalize(gl_LightSource[i].position - (geosphereCenter.x,geosphereCenter.y,geosphereCenter.z,0.0));
 
-	vec4 occulted = vec4(equal(occultedLight, ivec4(0,1,2,3)));
-	vec4 unocculted = vec4(notEqual(occultedLight, ivec4(0,1,2,3)));
 	float trad = srad+lrad;
 	float absdiff = abs(srad-lrad);
 
@@ -102,6 +104,7 @@ void main(void)
 
 		if (j>0) scatAtmosInt += e * len / 2.0;
 		mat4 primaryScatter;
+		// We hand-unroll these loops over lights, to avoid compiler problems:
 		primaryScatter[0] = exp(-(lightAtmosInt[0]+scatAtmosInt)*c) * e;
 		primaryScatter[1] = exp(-(lightAtmosInt[1]+scatAtmosInt)*c) * e;
 		primaryScatter[2] = exp(-(lightAtmosInt[2]+scatAtmosInt)*c) * e;
@@ -137,8 +140,8 @@ void main(void)
 		primaryScatter[3] *= lightIntensity[3];
 
 		vec4 sy = sp * lightDir;
-		vec4 sa = 1.0 - abs(sy)/sr;
-		ivec4 slt = lessThan(sy,0.0);
+		vec4 sa = vec4(1.0) - abs(sy)/vec4(sr);
+		vec4 slt = vec4(lessThan(sy,0.0));
 		vec4 secondaryScatterInt = silly*slt + (1.0-2.0*slt) *
 			exp(-0.0631 + a*(-0.418 + a*(8.47 + a*(-15.4 + a*10.5)))) / ADF;
 		secondaryScatterInt *= se;
@@ -152,28 +155,24 @@ void main(void)
 		vec4 sd = sy*slenInvSq + sqrt((1.0-slenInvSq)*(1.0-(sy*sy*slenInvSq)));
 		vec4 slightIntensity = clamp(sd / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0);
 		if (occultedLight == 0) {
-			vec3 projectedPoint = sp - sy*lightDir[0];
-			float dist = length(projectedPoint - occultCentre);
+			float dist = length(sp - occultCentre - sy[0]*lightDir[0] );
 			slightIntensity[0] *= (1.0 - mix(0.0, maxOcclusion,
-						clamp( ( srad+lrad-dist ) / ( srad+lrad - abs(srad-lrad) ), 0.0, 1.0)));
+						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
 		}
 		else if (occultedLight == 1) {
-			vec3 projectedPoint = sp - sy*lightDir[1];
-			float dist = length(projectedPoint - occultCentre);
+			float dist = length(sp - occultCentre - sy[1]*lightDir[1] );
 			slightIntensity[1] *= (1.0 - mix(0.0, maxOcclusion,
-						clamp( ( srad+lrad-dist ) / ( srad+lrad - abs(srad-lrad) ), 0.0, 1.0)));
+						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
 		}
 		else if (occultedLight == 2) {
-			vec3 projectedPoint = sp - sy*lightDir[2];
-			float dist = length(projectedPoint - occultCentre);
+			float dist = length(sp - occultCentre - sy[2]*lightDir[2] );
 			slightIntensity[2] *= (1.0 - mix(0.0, maxOcclusion,
-						clamp( ( srad+lrad-dist ) / ( srad+lrad - abs(srad-lrad) ), 0.0, 1.0)));
+						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
 		}
 		else if (occultedLight == 3) {
-			vec3 projectedPoint = sp - sy*lightDir[3];
-			float dist = length(projectedPoint - occultCentre);
+			float dist = length(sp - occultCentre - sy[3]*lightDir[3] );
 			slightIntensity[3] *= (1.0 - mix(0.0, maxOcclusion,
-						clamp( ( srad+lrad-dist ) / ( srad+lrad - abs(srad-lrad) ), 0.0, 1.0)));
+						clamp( ( trad-dist ) / ( trad-absdiff), 0.0, 1.0)));
 		}
 		secondaryScatter[0] *= slightIntensity[0];
 		secondaryScatter[1] *= slightIntensity[1];
@@ -206,9 +205,15 @@ void main(void)
 			( (j==0||j==SN) ? 1.0 :
 			  2.0 );
 	}
+	float total = 0.0;
 	for (int i=0; i<NUM_LIGHTS; ++i) {
-		scatterInt[i] *= c*gl_LightSource[i].diffuse*len/2.0;
-		for (int c=0; c<3; c++)
-			gl_TexCoord[2][c] += scatterInt[i][c];
+		total += scatterInt[i][0];
+		gl_TexCoord[2] += c*scatterInt[i]*len/2.0;
 	}
+	
+	gl_TexCoord[3] = vec4(1.0);
+	if (total > 0.0)
+		// record ratios
+		for (int i=0; i<NUM_LIGHTS; ++i)
+			gl_TexCoord[3][i] = scatterInt[i][0]*vec4(1.0/total);
 }

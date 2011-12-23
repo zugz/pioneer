@@ -16,6 +16,8 @@ uniform float maxOcclusion;
 
 varying vec4 varyingEyepos;
 
+#define PI 3.1415926535897931
+
 void sphereEntryExitDist(out float near, out float far, in vec3 sphereCenter, in vec3 eyeTo, in float radius)
 {
 	vec3 v = -sphereCenter;
@@ -38,11 +40,13 @@ void sphereEntryExitDist(out float near, out float far, in vec3 sphereCenter, in
 void main(void) {
 	vec4 atmosDiffuse = vec4(0.0,0.0,0.0,1.0);
 	vec3 eyedir = normalize(vec3(varyingEyepos));
+	vec4 mix = 0.0;
 	for (int i=0; i<NUM_LIGHTS; ++i) {
 		vec3 lightDir = normalize(vec3(gl_LightSource[i].position) - geosphereCenter);
-		for (int c=0; c<3; c++)
-			atmosDiffuse[c] += gl_TexCoord[2][c] * (1.0+dot(eyedir,lightDir)*dot(eyedir,lightDir))*(3.0/16*3.14);
+		mix += gl_TexCoord[3][i] * gl_LightSource[i].diffuse *
+			(1.0+dot(eyedir,lightDir)*dot(eyedir,lightDir))*(3.0/16*PI);
 	}
+	atmosDiffuse = gl_TexCoord[2] * mix;
 	atmosDiffuse.a = 1.0;
 	//float sun = max(0.0, dot(normalize(eyepos),normalize(vec3(gl_LightSource[0].position))));
 	gl_FragColor = atmosDiffuse;
