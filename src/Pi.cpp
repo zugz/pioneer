@@ -127,6 +127,7 @@ float Pi::frameTime;
 GLUquadric *Pi::gluQuadric;
 #if DEVKEYS
 bool Pi::showDebugInfo;
+bool Pi::useSecondary=true;
 #endif
 int Pi::statSceneTris;
 GameConfig Pi::config(GetPiUserDir() + "config.ini");
@@ -696,6 +697,9 @@ void Pi::HandleEvents()
 #if DEVKEYS
 						case SDLK_i: // Toggle Debug info
 							Pi::showDebugInfo = !Pi::showDebugInfo;
+							break;
+						case SDLK_y: // Toggle Debug info
+							Pi::useSecondary = !Pi::useSecondary;
 							break;
 						case SDLK_m:  // Gimme money!
 							if(Pi::game) {

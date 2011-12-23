@@ -40,6 +40,7 @@ SHADER_CLASS_BEGIN(GeosphereShader)
 	SHADER_UNIFORM_FLOAT(lrad)
 	SHADER_UNIFORM_FLOAT(maxOcclusion)
 	SHADER_UNIFORM_VEC4(lightDiscRadii)
+	SHADER_UNIFORM_INT(useSecondary)
 SHADER_CLASS_END()
 
 static GeosphereShader *s_geosphereSurfaceShader[4], *s_geosphereSkyShader[4], *s_geosphereStarShader, *s_geosphereDimStarShader[4];
@@ -1361,6 +1362,7 @@ void GeoSphere::Render(vector3d campos, const float radius, const float scale) {
 			shader->set_geosphereCenter(center.x, center.y, center.z);
 			shader->set_geosphereRadius(radius/scale);
 			shader->set_lightDiscRadii(m_lightDiscRadii[0],m_lightDiscRadii[1],m_lightDiscRadii[2],m_lightDiscRadii[3]);
+			shader->set_useSecondary(Pi::useSecondary);
 			if (eclipse) {
 				shader->set_occultedLight(eclipse->lightNum);
 				shader->set_occultCentre(occultCentre[0], occultCentre[1], occultCentre[2],0);

@@ -14,6 +14,8 @@ uniform float srad;
 uniform float lrad;
 uniform float maxOcclusion;
 
+uniform int useSecondary;
+
 varying vec4 varyingEyepos;
 
 void sphereEntryExitDist(out float near, out float far, in vec3 sphereCenter, in vec3 eyeTo, in float radius)
