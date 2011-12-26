@@ -14,6 +14,8 @@ uniform float srad;
 uniform float lrad;
 uniform float maxOcclusion;
 
+uniform int useSecondary;
+
 varying vec4 varyingEyepos;
 
 #define PI 3.1415926535897931
@@ -47,6 +49,8 @@ void main(void) {
 			(1.0+dot(eyedir,lightDir)*dot(eyedir,lightDir))*(3.0/16*PI);
 	}
 	atmosDiffuse = gl_TexCoord[2] * mix;
+	if (useSecondary == 1)
+		atmosDiffuse += gl_TexCoord[4];
 	atmosDiffuse.a = 1.0;
 	//float sun = max(0.0, dot(normalize(eyepos),normalize(vec3(gl_LightSource[0].position))));
 	gl_FragColor = atmosDiffuse;

@@ -2,7 +2,7 @@ uniform vec3 geosphereCenter;
 uniform float geosphereRadius;
 
 uniform int occultedLight;
-uniform vec3 occultCentre;
+uniform vec4 occultCentre;
 uniform float srad;
 uniform float lrad;
 uniform float maxOcclusion;

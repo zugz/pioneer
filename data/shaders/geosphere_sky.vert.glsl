@@ -80,6 +80,7 @@ void main(void)
 
 	// estimate integral of scattering along the eyeline
 	mat4 scatterInt = mat4(0.0);
+	vec4 secondaryScatterInt = 0.0;
 	float  scatAtmosInt = 0.0;
 	for (int j=0; j<SN+1; j++) {
 		vec4 p = a+float(j)*d;
@@ -91,8 +92,8 @@ void main(void)
 
 		float lenInvSq = 1.0/dot(p,p);
 
-		vec4 sp = p*(1.0+1.0/ADF);
-		float sr = length(sp);
+		vec4 sp = normalize(p);
+		float sr = length(p);
 		float se = exp(-ADF*(sr-1.0));
 
 		float slenInvSq = 1.0/dot(sp,sp);
@@ -111,48 +112,78 @@ void main(void)
 		primaryScatter[1] = exp(-(lightAtmosInt[1]+scatAtmosInt)*c) * e;
 		primaryScatter[2] = exp(-(lightAtmosInt[2]+scatAtmosInt)*c) * e;
 		primaryScatter[3] = exp(-(lightAtmosInt[3]+scatAtmosInt)*c) * e;
-		if (j>0) scatAtmosInt += e * len / 2.0;
+		if (j<SN) scatAtmosInt += e * len / 2.0;
 
 		vec4 d = y*lenInvSq + sqrt((1.0-lenInvSq)*(1.0-(y*y*lenInvSq)));
 		vec4 lightIntensity = clamp(d / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0);
-		vec4 projectedLengths;
+		vec4 secondaryLightIntensity = clamp(d / (4.0*lightDiscRadii) + 0.5, 0.0, 1.0);
+
 		if (occultedLight == 0) {
 			float dist = length(p - occultCentre - y[0]*lightDir[0] );
 			lightIntensity[0] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
+			secondaryLightIntensity[0] *= (1.0 - mix(0.0, maxOcclusion,
+						clamp( ( trad-dist ) / ( 2.0 * ( trad-absdiff ) ), 0.0, 1.0)));
 		}
 		else if (occultedLight == 1) {
-			float dist = length(p - occultCentre - y[1]*lightDir[0] );
+			float dist = length(p - occultCentre - y[1]*lightDir[1] );
 			lightIntensity[1] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
+			secondaryLightIntensity[1] *= (1.0 - mix(0.0, maxOcclusion,
+						clamp( ( trad-dist ) / ( 2.0 * ( trad-absdiff ) ), 0.0, 1.0)));
 		}
 		else if (occultedLight == 2) {
-			float dist = length(p - occultCentre - y[2]*lightDir[0] );
+			float dist = length(p - occultCentre - y[2]*lightDir[2] );
 			lightIntensity[2] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
+			secondaryLightIntensity[2] *= (1.0 - mix(0.0, maxOcclusion,
+						clamp( ( trad-dist ) / ( 2.0 * ( trad-absdiff ) ), 0.0, 1.0)));
 		}
 		else if (occultedLight == 3) {
-			float dist = length(p - occultCentre - y[3]*lightDir[0] );
+			float dist = length(p - occultCentre - y[3]*lightDir[3] );
 			lightIntensity[3] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
+			secondaryLightIntensity[3] *= (1.0 - mix(0.0, maxOcclusion,
+						clamp( ( trad-dist ) / ( 2.0 * ( trad-absdiff ) ), 0.0, 1.0)));
 		}
+
+		if (useSecondary == 1) {
+			// Complete hack
+			vec4 secondaryScatter = vec4(0.0);
+			float se1 = exp(min(0.0,-(ADF*(r-1.0)-1.0)));
+			float se2 = exp(-(ADF*(r-1.0)+1.0));
+			secondaryScatter += se1*exp(-se1*(1.0/ADF)*c)*c*(r-1.0);
+			float outer = 1.0 + 6.0/ADF;
+			if (r < outer)
+				secondaryScatter += se2*exp(-se2*(1.0/ADF)*c)*c*(outer-r);
+
+			secondaryScatterInt += secondaryScatter * secondaryLightIntensity[0] * primaryScatter[0] * gl_LightSource[0].diffuse;
+			secondaryScatterInt += secondaryScatter * secondaryLightIntensity[1] * primaryScatter[1] * gl_LightSource[1].diffuse;
+			secondaryScatterInt += secondaryScatter * secondaryLightIntensity[2] * primaryScatter[2] * gl_LightSource[2].diffuse;
+			secondaryScatterInt += secondaryScatter * secondaryLightIntensity[3] * primaryScatter[3] * gl_LightSource[3].diffuse;
+		}
+
 		primaryScatter[0] *= lightIntensity[0];
 		primaryScatter[1] *= lightIntensity[1];
 		primaryScatter[2] *= lightIntensity[2];
 		primaryScatter[3] *= lightIntensity[3];
 
+		scatterInt += ( primaryScatter ) *
+			( (j==0||j==SN) ? 1.0 :
+			  2.0 );
+
+		/*
 		vec4 sy = sp * lightDir;
 		vec4 sa = vec4(1.0) - abs(sy)/vec4(sr);
 		vec4 slt = vec4(lessThan(sy,0.0));
-		vec4 secondaryScatterInt = silly*slt + (1.0-2.0*slt) *
+		vec4 secondaryLightInt = silly*slt + (1.0-2.0*slt) *
 			exp(-0.0631 + a*(-0.418 + a*(8.47 + a*(-15.4 + a*10.5)))) / ADF;
-		secondaryScatterInt *= se;
+		secondaryLightInt *= se;
 
-		mat4 secondaryScatter;
-		secondaryScatter[0] = exp(-(secondaryScatterInt[0]+scatAtmosInt)*c) * se;
-		secondaryScatter[1] = exp(-(secondaryScatterInt[1]+scatAtmosInt)*c) * se;
-		secondaryScatter[2] = exp(-(secondaryScatterInt[2]+scatAtmosInt)*c) * se;
-		secondaryScatter[3] = exp(-(secondaryScatterInt[3]+scatAtmosInt)*c) * se;
+		secondaryScatter[0] = exp(-(secondaryLightInt[0]+scatAtmosInt)*c) * se;
+		secondaryScatter[1] = exp(-(secondaryLightInt[1]+scatAtmosInt)*c) * se;
+		secondaryScatter[2] = exp(-(secondaryLightInt[2]+scatAtmosInt)*c) * se;
+		secondaryScatter[3] = exp(-(secondaryLightInt[3]+scatAtmosInt)*c) * se;
 
 		vec4 sd = sy*slenInvSq + sqrt((1.0-slenInvSq)*(1.0-(sy*sy*slenInvSq)));
 		vec4 slightIntensity = clamp(sd / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0);
@@ -181,6 +212,9 @@ void main(void)
 		secondaryScatter[2] *= slightIntensity[2];
 		secondaryScatter[3] *= slightIntensity[3];
 
+		secondaryScatter *= clamp((r-1)*ADF/3.0, 0.0, 1.0);
+		*/
+
 		/*
 		   float sy = dot(sp,lightDir[i]);
 		   float sa = 1.0 - abs(sy)/sr;
@@ -203,9 +237,6 @@ void main(void)
 		   secondaryScatter *= slightIntensity;
 		   */
 
-		scatterInt += ( primaryScatter + secondaryScatter ) *
-			( (j==0||j==SN) ? 1.0 :
-			  2.0 );
 	}
 	float total = 0.0;
 	for (int i=0; i<NUM_LIGHTS; ++i) {
@@ -218,4 +249,7 @@ void main(void)
 		// record ratios
 		for (int i=0; i<NUM_LIGHTS; ++i)
 			gl_TexCoord[3][i] = scatterInt[i][0]*vec4(1.0/total);
+
+	gl_TexCoord[4] = c * secondaryScatterInt * len/2.0;
+	gl_TexCoord[4][3] = 1.0;
 }
