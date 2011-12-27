@@ -305,7 +305,7 @@ void main(void)
 		rCol += rc * gl_LightSource[i].diffuse * rphase *
 			rscatterInt[i] * len/2.0;
 
-		// Mie scattering, meanwhile, is highly direction-dependent; we
+		// Mie scattering, meanwhile, is highly direction-dependent, so we
 		// calculate the phase function in the fragment shader.
 		mCol[i] = mc * gl_LightSource[i].diffuse * mscatterInt[i] * len/2.0;
 	}

@@ -73,6 +73,6 @@ void main(void) {
 	gl_FragColor = atmosDiffuse;
 
 #ifdef ZHACK
-	SetFragDepth(gl_TexCoord[6].z);
+	SetFragDepth(gl_TexCoord[0].z);
 #endif
 }

@@ -3,7 +3,7 @@
 vec4 logarithmicTransform() 
 {
 	vec4 vertexPosClip = gl_ModelViewProjectionMatrix * gl_Vertex;
-	gl_TexCoord[6] = vertexPosClip;
+	gl_TexCoord[0] = vertexPosClip;
 	return vertexPosClip;
 }
 

@@ -7,7 +7,7 @@ void main(void)
 	gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
 #endif
 	gl_FrontColor = gl_Color;
-	gl_TexCoord[0] = gl_ModelViewMatrix * gl_Vertex;
+	gl_TexCoord[1] = gl_ModelViewMatrix * gl_Vertex;
 	vec3 tnorm = gl_NormalMatrix * gl_Normal;
-	gl_TexCoord[1] = vec4(tnorm.x, tnorm.y, tnorm.z, 0.0);
+	gl_TexCoord[2] = vec4(tnorm.x, tnorm.y, tnorm.z, 0.0);
 }

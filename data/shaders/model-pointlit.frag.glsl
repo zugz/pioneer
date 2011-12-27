@@ -27,8 +27,8 @@ uniform bool useglow;
 
 void main(void)
 {
-	vec3 eye = vec3(0.0, 0.0, 0.0);//gl_TexCoord[2]);
-	vec3 ecPosition3 = vec3(gl_TexCoord[1]);
+	vec3 eye = vec3(0.0, 0.0, 0.0);//gl_TexCoord[3]);
+	vec3 ecPosition3 = vec3(gl_TexCoord[2]);
 	vec3 normal = normalize(norm);
 	vec4 amb = vec4(0.0);
 	vec4 diff = vec4(0.0);
@@ -67,7 +67,7 @@ void main(void)
 
 	vec4 emission = gl_FrontMaterial.emission;
 	if ( useglow )
-		emission = texture2D(texGlow, gl_TexCoord[0].st);
+		emission = texture2D(texGlow, gl_TexCoord[1].st);
 
 	gl_FragColor =
 		gl_LightModel.ambient * gl_FrontMaterial.ambient +
@@ -78,8 +78,8 @@ void main(void)
 	gl_FragColor.w = gl_FrontMaterial.diffuse.w;
 
 	if ( usetex )
-		gl_FragColor *= texture2D(tex, gl_TexCoord[0].st);
+		gl_FragColor *= texture2D(tex, gl_TexCoord[1].st);
 #ifdef ZHACK
-	SetFragDepth(gl_TexCoord[6].z);
+	SetFragDepth(gl_TexCoord[0].z);
 #endif
 }
