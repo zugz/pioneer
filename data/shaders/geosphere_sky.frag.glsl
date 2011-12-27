@@ -43,10 +43,19 @@ void main(void) {
 	vec4 atmosDiffuse = vec4(0.0,0.0,0.0,1.0);
 	vec3 eyedir = normalize(vec3(varyingEyepos));
 	vec4 mix = 0.0;
+
+	vec4 c = vec4(5.8,13.5,33.1,0)*geosphereScale*geosphereRadius/1000000.0;
+	float mc = 2.0*geosphereScale*geosphereRadius/100000.0;
+	float mce = mc/0.9;
+	float g = 0.76;
+
 	for (int i=0; i<NUM_LIGHTS; ++i) {
 		vec3 lightDir = normalize(vec3(gl_LightSource[i].position) - geosphereCenter);
+		float mu = dot(eyedir,lightDir);
 		mix += gl_TexCoord[3][i] * gl_LightSource[i].diffuse *
-			(1.0+dot(eyedir,lightDir)*dot(eyedir,lightDir))*(3.0/16*PI);
+		    ( c * (1.0+mu*mu)*(3.0/16*PI) +
+		      mc * (3.0/(8.0*PI)) * ( (1-g*g)*(1+mu*mu) ) / ( (2+g*g)*pow(1+g*g-2*g*mu, 1.5)) );
+
 	}
 	atmosDiffuse = gl_TexCoord[2] * mix;
 	if (useSecondary == 1)

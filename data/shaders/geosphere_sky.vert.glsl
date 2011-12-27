@@ -62,6 +62,8 @@ void main(void)
 	// TODO: take into account surface density, and other characteristics of
 	// the atmosphere.
 	vec4 c = vec4(5.8,13.5,33.1,0)*geosphereScale*geosphereRadius/1000000.0;
+	float mc = 2.0*geosphereScale*geosphereRadius/100000.0;
+	vec4 extinction = c + vec4(mc/0.9);
 
 	//const float coeffs[5] = {-0.0631,-0.418,8.47,-15.4,10.5};
 	//const float sumCoeffs = -0.0631-0.418+8.47-15.4+10.5;
@@ -108,10 +110,10 @@ void main(void)
 		if (j>0) scatAtmosInt += e * len / 2.0;
 		mat4 primaryScatter;
 		// We hand-unroll these loops over lights, to avoid compiler problems:
-		primaryScatter[0] = exp(-(lightAtmosInt[0]+scatAtmosInt)*c) * e;
-		primaryScatter[1] = exp(-(lightAtmosInt[1]+scatAtmosInt)*c) * e;
-		primaryScatter[2] = exp(-(lightAtmosInt[2]+scatAtmosInt)*c) * e;
-		primaryScatter[3] = exp(-(lightAtmosInt[3]+scatAtmosInt)*c) * e;
+		primaryScatter[0] = exp(-(lightAtmosInt[0]+scatAtmosInt)*extinction) * e;
+		primaryScatter[1] = exp(-(lightAtmosInt[1]+scatAtmosInt)*extinction) * e;
+		primaryScatter[2] = exp(-(lightAtmosInt[2]+scatAtmosInt)*extinction) * e;
+		primaryScatter[3] = exp(-(lightAtmosInt[3]+scatAtmosInt)*extinction) * e;
 		if (j<SN) scatAtmosInt += e * len / 2.0;
 
 		vec4 d = y*lenInvSq + sqrt((1.0-lenInvSq)*(1.0-(y*y*lenInvSq)));
@@ -152,10 +154,10 @@ void main(void)
 			vec4 secondaryScatter = vec4(0.0);
 			float se1 = exp(min(0.0,-(ADF*(r-1.0)-1.0)));
 			float se2 = exp(-(ADF*(r-1.0)+1.0));
-			secondaryScatter += se1*exp(-se1*(1.0/ADF)*c)*c*(r-1.0);
+			secondaryScatter += se1*exp(-se1*(1.0/ADF)*extinction)*(c+mc)*(r-1.0);
 			float outer = 1.0 + 6.0/ADF;
 			if (r < outer)
-				secondaryScatter += se2*exp(-se2*(1.0/ADF)*c)*c*(outer-r);
+				secondaryScatter += se2*exp(-se2*(1.0/ADF)*extinction)*(c+mc)*(outer-r);
 
 			secondaryScatterInt += secondaryScatter * secondaryLightIntensity[0] * primaryScatter[0] * gl_LightSource[0].diffuse;
 			secondaryScatterInt += secondaryScatter * secondaryLightIntensity[1] * primaryScatter[1] * gl_LightSource[1].diffuse;
@@ -241,7 +243,7 @@ void main(void)
 	float total = 0.0;
 	for (int i=0; i<NUM_LIGHTS; ++i) {
 		total += scatterInt[i][0];
-		gl_TexCoord[2] += c*scatterInt[i]*len/2.0;
+		gl_TexCoord[2] += scatterInt[i]*len/2.0;
 	}
 	
 	gl_TexCoord[3] = vec4(1.0);
@@ -250,6 +252,5 @@ void main(void)
 		for (int i=0; i<NUM_LIGHTS; ++i)
 			gl_TexCoord[3][i] = scatterInt[i][0]*vec4(1.0/total);
 
-	gl_TexCoord[4] = c * secondaryScatterInt * len/2.0;
-	gl_TexCoord[4][3] = 1.0;
+	gl_TexCoord[4] = (c+mc) * secondaryScatterInt * len/2.0;
 }
