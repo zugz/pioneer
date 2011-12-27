@@ -228,7 +228,8 @@ void main(void)
 		// our implementation of multiple scattering, therefore, we use
 		// the constant phase factor:
 		const float rPhase = 1.0/(4.0*PI);
-		rCol += rc * gl_LightSource[i].diffuse * rPhase * rScatterInt[i] * len/3.0;
+		const float hackFactor = 5.0; // <--- XXX HACK XXX
+		rCol += rc * hackFactor * gl_LightSource[i].diffuse * rPhase * rScatterInt[i] * len/3.0;
 
 		// Mie scattering, meanwhile, is highly direction-dependent, so we
 		// calculate the phase function in the fragment shader.
