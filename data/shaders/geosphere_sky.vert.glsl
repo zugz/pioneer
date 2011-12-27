@@ -62,34 +62,37 @@ void main(void)
 	vec4 a = vec4(a0.x,a0.y,a0.z,0.0);
 	vec4 b = vec4(b0.x,b0.y,b0.z,0.0);
 
-	//const float ADF = 500.0;
-	float surfaceDensity = atmosColor.w*geosphereAtmosFogDensity;
+	// float surfaceDensity = atmosColor.w*geosphereAtmosFogDensity;
 
-	// TODO: take into account surface density, and other characteristics of
-	// the atmosphere.
-	// 
-	// Numbers taken from Precomputed Atmospheric Scattering, Bruneton and Neyret 2008
+	// Numbers for Earth taken from Precomputed Atmospheric Scattering,
+	// Bruneton and Neyret 2008
 	const float rADF = 795.0;
 	const float mADF = 5295.0;
-	vec4 rc = vec4(5.8,13.5,33.1,0)*geosphereScale*geosphereRadius/1000000.0;
-	vec4 rextinction = rc;
-	float mc = 2.0*geosphereScale*geosphereRadius/100000.0;
-	float mextinction = mc/0.9;
 
-	//const float coeffs[5] = { 0.10220, -0.81786, 10.53578, -19.373, 12.943};
-	//const float mcoeffs[5] = { 1.464499, -3.808514, 25.688546, -48.801948, 29.360771 };
+	float scale = geosphereScale*geosphereRadius;
+
+	// Rayleigh scattering for gases, Mie for aerosols.
+	// Note: surface density is part of rc and mc; we probably want to
+	// separate them out to deal with other planets.
+	vec4 rc = scale*vec4(5.8,13.5,33.1,0)/1000000.0;
+	vec4 rAbsorption = vec4(0.0);
+	vec4 rextinction = rc + rAbsorption;
+
+	float mc = scale*2.0/100000.0;
+	float mAbsorption = 0.11*mc;
+	float mextinction = mc + mAbsorption;
+
+	// polynomial coefficients calculated by polynomial fitting from ADF
+	// values:
 	const vec4 rcoeffs = vec4(-0.81786, 10.53578, -19.373, 12.943);
 	const float rconstcoeff = 0.10220;
 	const vec4 mcoeffs = vec4( -3.808514, 25.688546, -48.801948, 29.360771 );
 	const float mconstcoeff = 1.464499;
 
-	//const float coeffs[5] = {-0.0631,-0.418,8.47,-15.4,10.5};
-	//const float sumCoeffs = -0.0631-0.418+8.47-15.4+10.5;
-	const float rsilly = 2.0*exp(rconstcoeff+rcoeffs[0]+rcoeffs[1]+rcoeffs[2]+rcoeffs[3])/rADF;
-	const float msilly = 2.0*exp(mconstcoeff+mcoeffs[0]+mcoeffs[1]+mcoeffs[2]+mcoeffs[3])/mADF;
-	const int SN = 10;
-	vec4 d = (b-a)/float(SN);
-	float len = length(d);
+	// estimated atmosphere density integrals for whole line tangent to
+	// sphere:
+	const float rTangentInt = 2.0*exp(rconstcoeff+rcoeffs[0]+rcoeffs[1]+rcoeffs[2]+rcoeffs[3])/rADF;
+	const float mTangentInt = 2.0*exp(mconstcoeff+mcoeffs[0]+mcoeffs[1]+mcoeffs[2]+mcoeffs[3])/mADF;
 
 	mat4 lightDir = mat4(0.0);
 	for (int i=0; i<NUM_LIGHTS; ++i)
@@ -99,12 +102,18 @@ void main(void)
 	float absdiff = abs(srad-lrad);
 
 	// estimate integral of scattering along the eyeline
-	mat4 rscatterInt = mat4(0.0);
-	mat4 mscatterInt = mat4(0.0);
+	mat4 rScatterInt = mat4(0.0);
+	mat4 mScatterInt = mat4(0.0);
 	vec4 secondaryScatterInt = vec4(0.0);
-	float rscatAtmosInt = 0.0;
-	float mscatAtmosInt = 0.0;
-	for (int j=0; j<SN+1; j++) {
+	float rScatAtmosInt = 0.0;
+	float mScatAtmosInt = 0.0;
+
+	const int N = 10;
+	vec4 d = (b-a)/float(N);
+	float len = length(d);
+
+	for (int j=0; j<N+1; j++) {
+		float simpson = (j==0||j==N) ? 1.0 : (j == j/2*2) ? 2.0 : 4.0;
 		vec4 p = a+float(j)*d;
 		float r = length(p);
 		if (r < 1.0)
@@ -118,27 +127,27 @@ void main(void)
 		vec4 y = p * lightDir;
 		vec4 a = vec4(1.0) - abs(y)/vec4(r);
 		vec4 lt = vec4(lessThan(y,vec4(0.0)));
-		vec4 rlightAtmosInt =
-			re * ( rsilly*lt + (1.0-2.0*lt) *
-			exp(rconstcoeff + a*(rcoeffs[0] + a*(rcoeffs[1] + a*(rcoeffs[2] + a*rcoeffs[3])))) / rADF);
-		vec4 mlightAtmosInt =
-			me * ( msilly*lt + (1.0-2.0*lt) *
-			exp(mconstcoeff + a*(mcoeffs[0] + a*(mcoeffs[1] + a*(mcoeffs[2] + a*mcoeffs[3])))) / mADF);
+		vec4 rLightAtmosInt =
+			re * ( rTangentInt*lt + (1.0-2.0*lt) *
+					exp(rconstcoeff + a*(rcoeffs[0] + a*(rcoeffs[1] + a*(rcoeffs[2] + a*rcoeffs[3])))) / rADF);
+		vec4 mLightAtmosInt =
+			me * ( mTangentInt*lt + (1.0-2.0*lt) *
+					exp(mconstcoeff + a*(mcoeffs[0] + a*(mcoeffs[1] + a*(mcoeffs[2] + a*mcoeffs[3])))) / mADF);
 
-		if (j>0) rscatAtmosInt += re * len / 2.0;
-		if (j>0) mscatAtmosInt += me * len / 2.0;
+		if (j>0) rScatAtmosInt += re * len / 2.0;
+		if (j>0) mScatAtmosInt += me * len / 2.0;
 		mat4 attenuation;
 		// We hand-unroll these loops over lights, to avoid compiler problems:
-		attenuation[0] = exp(-( (rlightAtmosInt[0]+rscatAtmosInt)*rextinction + (mlightAtmosInt[0]+mscatAtmosInt)*mextinction));
-		attenuation[1] = exp(-( (rlightAtmosInt[1]+rscatAtmosInt)*rextinction + (mlightAtmosInt[1]+mscatAtmosInt)*mextinction));
-		attenuation[2] = exp(-( (rlightAtmosInt[2]+rscatAtmosInt)*rextinction + (mlightAtmosInt[2]+mscatAtmosInt)*mextinction));
-		attenuation[3] = exp(-( (rlightAtmosInt[3]+rscatAtmosInt)*rextinction + (mlightAtmosInt[3]+mscatAtmosInt)*mextinction));
-		if (j<SN) rscatAtmosInt += re * len / 2.0;
-		if (j<SN) mscatAtmosInt += me * len / 2.0;
+		attenuation[0] = exp(-( (rLightAtmosInt[0]+rScatAtmosInt)*rextinction + (mLightAtmosInt[0]+mScatAtmosInt)*mextinction ));
+		attenuation[1] = exp(-( (rLightAtmosInt[1]+rScatAtmosInt)*rextinction + (mLightAtmosInt[1]+mScatAtmosInt)*mextinction ));
+		attenuation[2] = exp(-( (rLightAtmosInt[2]+rScatAtmosInt)*rextinction + (mLightAtmosInt[2]+mScatAtmosInt)*mextinction ));
+		attenuation[3] = exp(-( (rLightAtmosInt[3]+rScatAtmosInt)*rextinction + (mLightAtmosInt[3]+mScatAtmosInt)*mextinction ));
+		if (j<N) rScatAtmosInt += re * len / 2.0;
+		if (j<N) mScatAtmosInt += me * len / 2.0;
 
 		vec4 d = y*lenInvSq + sqrt((1.0-lenInvSq)*(1.0-(y*y*lenInvSq)));
 		vec4 lightIntensity = clamp(d / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0);
-		
+
 		// TODO: estimate secondaryLightIntensity by considering sphere around
 		// point?
 		vec4 secondaryLightIntensity = clamp(d / (6.0*lightDiscRadii) + 0.5, 0.0, 1.0);
@@ -186,10 +195,10 @@ void main(void)
 				secondaryScatter += ( rc * re * rse2*exp(-rse2*(1.0/rADF)*rextinction)*rc +
 						mc * me * mse2*exp(-mse2*(1.0/mADF)*mextinction)*mc ) * (outer-r);
 
-			secondaryScatterInt += secondaryScatter * secondaryLightIntensity[0] * attenuation[0] * gl_LightSource[0].diffuse;
-			secondaryScatterInt += secondaryScatter * secondaryLightIntensity[1] * attenuation[1] * gl_LightSource[1].diffuse;
-			secondaryScatterInt += secondaryScatter * secondaryLightIntensity[2] * attenuation[2] * gl_LightSource[2].diffuse;
-			secondaryScatterInt += secondaryScatter * secondaryLightIntensity[3] * attenuation[3] * gl_LightSource[3].diffuse;
+			secondaryScatterInt += simpson * secondaryScatter * secondaryLightIntensity[0] * attenuation[0] * gl_LightSource[0].diffuse;
+			secondaryScatterInt += simpson * secondaryScatter * secondaryLightIntensity[1] * attenuation[1] * gl_LightSource[1].diffuse;
+			secondaryScatterInt += simpson * secondaryScatter * secondaryLightIntensity[2] * attenuation[2] * gl_LightSource[2].diffuse;
+			secondaryScatterInt += simpson * secondaryScatter * secondaryLightIntensity[3] * attenuation[3] * gl_LightSource[3].diffuse;
 		}
 
 		attenuation[0] *= lightIntensity[0];
@@ -197,117 +206,33 @@ void main(void)
 		attenuation[2] *= lightIntensity[2];
 		attenuation[3] *= lightIntensity[3];
 
-		mat4 rscatter;
-		mat4 mscatter;
-		rscatter[0] = attenuation[0] * re;
-		rscatter[1] = attenuation[1] * re;
-		rscatter[2] = attenuation[2] * re;
-		rscatter[3] = attenuation[3] * re;
-		mscatter[0] = attenuation[0] * me;
-		mscatter[1] = attenuation[1] * me;
-		mscatter[2] = attenuation[2] * me;
-		mscatter[3] = attenuation[3] * me;
-		rscatterInt += ( rscatter ) *
-			( (j==0||j==SN) ? 1.0 :
-			  2.0 );
-		mscatterInt += ( mscatter ) *
-			( (j==0||j==SN) ? 1.0 :
-			  2.0 );
-
-		/*
-		vec4 sy = sp * lightDir;
-		vec4 sa = vec4(1.0) - abs(sy)/vec4(sr);
-		vec4 slt = vec4(lessThan(sy,0.0));
-		vec4 secondaryLightInt = silly*slt + (1.0-2.0*slt) *
-			exp(-0.0631 + a*(-0.418 + a*(8.47 + a*(-15.4 + a*10.5)))) / ADF;
-		secondaryLightInt *= se;
-
-		secondaryScatter[0] = exp(-(secondaryLightInt[0]+scatAtmosInt)*c) * se;
-		secondaryScatter[1] = exp(-(secondaryLightInt[1]+scatAtmosInt)*c) * se;
-		secondaryScatter[2] = exp(-(secondaryLightInt[2]+scatAtmosInt)*c) * se;
-		secondaryScatter[3] = exp(-(secondaryLightInt[3]+scatAtmosInt)*c) * se;
-
-		vec4 sd = sy*slenInvSq + sqrt((1.0-slenInvSq)*(1.0-(sy*sy*slenInvSq)));
-		vec4 slightIntensity = clamp(sd / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0);
-		if (occultedLight == 0) {
-			float dist = length(sp - occultCentre - sy[0]*lightDir[0] );
-			slightIntensity[0] *= (1.0 - mix(0.0, maxOcclusion,
-						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
-		}
-		else if (occultedLight == 1) {
-			float dist = length(sp - occultCentre - sy[1]*lightDir[1] );
-			slightIntensity[1] *= (1.0 - mix(0.0, maxOcclusion,
-						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
-		}
-		else if (occultedLight == 2) {
-			float dist = length(sp - occultCentre - sy[2]*lightDir[2] );
-			slightIntensity[2] *= (1.0 - mix(0.0, maxOcclusion,
-						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
-		}
-		else if (occultedLight == 3) {
-			float dist = length(sp - occultCentre - sy[3]*lightDir[3] );
-			slightIntensity[3] *= (1.0 - mix(0.0, maxOcclusion,
-						clamp( ( trad-dist ) / ( trad-absdiff), 0.0, 1.0)));
-		}
-		secondaryScatter[0] *= slightIntensity[0];
-		secondaryScatter[1] *= slightIntensity[1];
-		secondaryScatter[2] *= slightIntensity[2];
-		secondaryScatter[3] *= slightIntensity[3];
-
-		secondaryScatter *= clamp((r-1)*ADF/3.0, 0.0, 1.0);
-		*/
-
-		/*
-		   float sy = dot(sp,lightDir[i]);
-		   float sa = 1.0 - abs(sy)/sr;
-		   float secondaryScatterInt = exp(-0.00287 + sa*(0.459 + sa*(3.83 + sa*(-6.80 + sa*5.25)))) / ADF;
-		   if (sy < 0.0) {
-		   secondaryScatterInt *= -1;
-		   secondaryScatterInt += silly;
-		   }
-		   secondaryScatterInt *= se;
-		   vec3 secondaryScatter = exp(-(secondaryScatterInt+scatAtmosInt[i])*c) * se;
-
-		   float sd = sy*slenInvSq + sqrt((1-slenInvSq)*(1-(sy*sy*slenInvSq)));
-		   float slightIntensity = clamp(sd / (2.0*lightDiscRadii[i]) + 0.5, 0.0, 1.0);
-		   if (occultedLight == i) {
-		   vec3 projectedPoint = sp - sy*lightDir[i];
-		   float dist = length(projectedPoint - occultCentre);
-		   slightIntensity *= (1.0 - mix(0.0, maxOcclusion,
-		   clamp( ( srad+lrad-dist ) / ( srad+lrad - abs(srad-lrad) ), 0.0, 1.0)));
-		   }
-		   secondaryScatter *= slightIntensity;
-		   */
-
+		mat4 rScatter;
+		mat4 mScatter;
+		rScatter[0] = attenuation[0] * re;
+		rScatter[1] = attenuation[1] * re;
+		rScatter[2] = attenuation[2] * re;
+		rScatter[3] = attenuation[3] * re;
+		mScatter[0] = attenuation[0] * me;
+		mScatter[1] = attenuation[1] * me;
+		mScatter[2] = attenuation[2] * me;
+		mScatter[3] = attenuation[3] * me;
+		rScatterInt += rScatter * simpson;
+		mScatterInt += mScatter * simpson;
 	}
-	/*
-	float total = 0.0;
-	for (int i=0; i<NUM_LIGHTS; ++i) {
-		total += scatterInt[i][0];
-		gl_TexCoord[2] += scatterInt[i]*len/2.0;
-	}
-	
-	gl_TexCoord[3] = vec4(1.0);
-	if (total > 0.0)
-		// record ratios
-		for (int i=0; i<NUM_LIGHTS; ++i)
-			gl_TexCoord[3][i] = scatterInt[i][0]*vec4(1.0/total);
-	*/
 
 	rCol = 0.0;
 	for (int i=0; i<NUM_LIGHTS; ++i) {
 		// Actual phase function for Rayleigh scattering is
-		// (1 + // cos(viewAngle) * (3/(16\pi)); but due to multiple
-		// scattering, this angle dependence is barely present in real skies.
-		// As part of our ad-hoc implementation of multiple scattering,
-		// therefore, we use a constant phase factor:
-		const float rphase = (1.0+0.5)*(3.0/(16*PI));
-		rCol += rc * gl_LightSource[i].diffuse * rphase *
-			rscatterInt[i] * len/2.0;
+		// (1 + cos(viewAngle) * (3/(16\pi)), but due to multiple scattering,
+		// the dependence on angle is barely present in real skies. As part of
+		// our implementation of multiple scattering, therefore, we use
+		// the constant phase factor:
+		const float rPhase = 1.0/(4.0*PI);
+		rCol += rc * gl_LightSource[i].diffuse * rPhase * rScatterInt[i] * len/3.0;
 
 		// Mie scattering, meanwhile, is highly direction-dependent, so we
 		// calculate the phase function in the fragment shader.
-		mCol[i] = mc * gl_LightSource[i].diffuse * mscatterInt[i] * len/2.0;
+		mCol[i] = mc * gl_LightSource[i].diffuse * mScatterInt[i] * len/3.0;
 	}
-	secondaryCol = secondaryScatterInt * len/2.0;
+	secondaryCol = secondaryScatterInt * len/3.0;
 }
