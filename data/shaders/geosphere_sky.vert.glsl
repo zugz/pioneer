@@ -148,37 +148,35 @@ void main(void)
 		vec4 d = y*lenInvSq + sqrt((1.0-lenInvSq)*(1.0-(y*y*lenInvSq)));
 		vec4 lightIntensity = clamp(d / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0);
 
-		// TODO: estimate secondaryLightIntensity by considering sphere around
-		// point?
-		vec4 secondaryLightIntensity = clamp(d / (6.0*lightDiscRadii) + 0.5, 0.0, 1.0);
+		vec4 secondaryLightIntensity = clamp(d / (2.0*(lightDiscRadii+2.0/rADF)) + 0.5, 0.0, 1.0);
 
 		if (occultedLight == 0) {
 			float dist = length(p - occultCentre - y[0]*lightDir[0] );
 			lightIntensity[0] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
 			secondaryLightIntensity[0] *= (1.0 - mix(0.0, maxOcclusion,
-						clamp( ( trad-dist ) / ( 3.0 * ( trad-absdiff ) ), 0.0, 1.0)));
+						clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
 		}
 		else if (occultedLight == 1) {
 			float dist = length(p - occultCentre - y[1]*lightDir[1] );
 			lightIntensity[1] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
 			secondaryLightIntensity[1] *= (1.0 - mix(0.0, maxOcclusion,
-						clamp( ( trad-dist ) / ( 3.0 * ( trad-absdiff ) ), 0.0, 1.0)));
+						clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
 		}
 		else if (occultedLight == 2) {
 			float dist = length(p - occultCentre - y[2]*lightDir[2] );
 			lightIntensity[2] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
 			secondaryLightIntensity[2] *= (1.0 - mix(0.0, maxOcclusion,
-						clamp( ( trad-dist ) / ( 3.0 * ( trad-absdiff ) ), 0.0, 1.0)));
+						clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
 		}
 		else if (occultedLight == 3) {
 			float dist = length(p - occultCentre - y[3]*lightDir[3] );
 			lightIntensity[3] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
 			secondaryLightIntensity[3] *= (1.0 - mix(0.0, maxOcclusion,
-						clamp( ( trad-dist ) / ( 3.0 * ( trad-absdiff ) ), 0.0, 1.0)));
+						clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
 		}
 
 		if (useSecondary == 1) {
@@ -186,7 +184,7 @@ void main(void)
 			vec4 secondaryScatter = vec4(0.0);
 			float rse1 = exp(min(0.0,-(rADF*(r-1.0)-1.0)));
 			float mse1 = exp(min(0.0,-(mADF*(r-1.0)-1.0)));
-			float rse2 = exp(-(mADF*(r-1.0)+1.0));
+			float rse2 = exp(-(rADF*(r-1.0)+1.0));
 			float mse2 = exp(-(mADF*(r-1.0)+1.0));
 			secondaryScatter += ( rc * re * rse1*exp(-rse1*(1.0/rADF)*rextinction)*rc +
 					mc * me * mse1*exp(-mse1*(1.0/mADF)*mextinction)*mc ) * (r-1.0);
