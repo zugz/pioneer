@@ -64,21 +64,23 @@ void main(void)
 
 	// float surfaceDensity = atmosColor.w*geosphereAtmosFogDensity;
 
-	// Numbers for Earth taken from Precomputed Atmospheric Scattering,
-	// Bruneton and Neyret 2008
-	const float rADF = 795.0;
-	const float mADF = 5295.0;
-
 	float scale = geosphereScale*geosphereRadius;
 
+	// Numbers for Earth taken from Precomputed Atmospheric Scattering,
+	// Bruneton and Neyret 2008
+	//
 	// Rayleigh scattering for gases, Mie for aerosols.
-	// Note: surface density is part of rc and mc; we probably want to
-	// separate them out to deal with other planets.
-	vec4 rc = scale*vec4(5.8,13.5,33.1,0)/1000000.0;
+	const vec4 gasScatteringSeaLevel = vec4(5.8,13.5,33.1,0)*pow(10,-6);
+	// rADF = planetRadius / gasScaleHeight
+	const float rADF = 795.0;
+	vec4 rc = scale*gasScatteringSeaLevel;
 	vec4 rAbsorption = vec4(0.0);
 	vec4 rextinction = rc + rAbsorption;
 
-	float mc = scale*2.0/100000.0;
+	const float particleScatteringSeaLevel = 20*pow(10,-6);
+	// rADF = planetRadius / particleScaleHeight
+	const float mADF = 5295.0;
+	float mc = scale*particleScatteringSeaLevel;
 	float mAbsorption = 0.11*mc;
 	float mextinction = mc + mAbsorption;
 
@@ -180,18 +182,17 @@ void main(void)
 		}
 
 		if (useSecondary == 1) {
-			// Complete hack
+			// XXX: Entirely ad hoc secondary scatter: split into two components, from below and
+			// from above, and in each case just integrate along a line, using density 1/ADF away as
+			// estimate of average... there's no good theoretical reasoning behind this, but it
+			// seems to work! 
 			vec4 secondaryScatter = vec4(0.0);
 			float rse1 = exp(min(0.0,-(rADF*(r-1.0)-1.0)));
-			float mse1 = exp(min(0.0,-(mADF*(r-1.0)-1.0)));
 			float rse2 = exp(-(rADF*(r-1.0)+1.0));
-			float mse2 = exp(-(mADF*(r-1.0)+1.0));
-			secondaryScatter += ( rc * re * rse1*exp(-rse1*(1.0/rADF)*rextinction)*rc +
-					mc * me * mse1*exp(-mse1*(1.0/mADF)*mextinction)*mc ) * (r-1.0);
+			secondaryScatter += rc * re * rse1*exp(-rse1*(1.0/rADF)*rextinction)*rc * (r-1.0);
 			float outer = 1.0 + 6.0/rADF;
 			if (r < outer)
-				secondaryScatter += ( rc * re * rse2*exp(-rse2*(1.0/rADF)*rextinction)*rc +
-						mc * me * mse2*exp(-mse2*(1.0/mADF)*mextinction)*mc ) * (outer-r);
+				secondaryScatter += rc * re * rse2*exp(-rse2*(1.0/rADF)*rextinction)*rc * (outer-r);
 
 			secondaryScatterInt += simpson * secondaryScatter * secondaryLightIntensity[0] * attenuation[0] * gl_LightSource[0].diffuse;
 			secondaryScatterInt += simpson * secondaryScatter * secondaryLightIntensity[1] * attenuation[1] * gl_LightSource[1].diffuse;
@@ -199,33 +200,30 @@ void main(void)
 			secondaryScatterInt += simpson * secondaryScatter * secondaryLightIntensity[3] * attenuation[3] * gl_LightSource[3].diffuse;
 		}
 
-		attenuation[0] *= lightIntensity[0];
-		attenuation[1] *= lightIntensity[1];
-		attenuation[2] *= lightIntensity[2];
-		attenuation[3] *= lightIntensity[3];
-
 		mat4 rScatter;
 		mat4 mScatter;
-		rScatter[0] = attenuation[0] * re;
-		rScatter[1] = attenuation[1] * re;
-		rScatter[2] = attenuation[2] * re;
-		rScatter[3] = attenuation[3] * re;
-		mScatter[0] = attenuation[0] * me;
-		mScatter[1] = attenuation[1] * me;
-		mScatter[2] = attenuation[2] * me;
-		mScatter[3] = attenuation[3] * me;
+		rScatter[0] = attenuation[0] * lightIntensity[0] * re;
+		rScatter[1] = attenuation[1] * lightIntensity[1] * re;
+		rScatter[2] = attenuation[2] * lightIntensity[2] * re;
+		rScatter[3] = attenuation[3] * lightIntensity[3] * re;
+		mScatter[0] = attenuation[0] * lightIntensity[0] * me;
+		mScatter[1] = attenuation[1] * lightIntensity[1] * me;
+		mScatter[2] = attenuation[2] * lightIntensity[2] * me;
+		mScatter[3] = attenuation[3] * lightIntensity[3] * me;
 		rScatterInt += rScatter * simpson;
 		mScatterInt += mScatter * simpson;
 	}
 
 	rCol = 0.0;
 	for (int i=0; i<NUM_LIGHTS; ++i) {
-		// Actual phase function for Rayleigh scattering is
-		// (1 + cos(viewAngle) * (3/(16\pi)), but due to multiple scattering,
-		// the dependence on angle is barely present in real skies. As part of
-		// our implementation of multiple scattering, therefore, we use
-		// the constant phase factor:
+		// Actual phase function for Rayleigh scattering is (1 + cos(viewAngle) * (3/(16\pi)), but
+		// due to multiple scattering, the dependence on angle is barely present in real skies. As
+		// part of our implementation of multiple scattering, therefore, we use the constant phase
+		// factor:
 		const float rPhase = 1.0/(4.0*PI);
+		// We also just multiply up the value by an ad hoc factor. We could try to excuse this by
+		// saying it accounts for multiple scatter, but I've no reason other than subjective
+		// judgement of results to think it physically realistic!
 		const float hackFactor = 5.0; // <--- XXX HACK XXX
 		rCol += rc * hackFactor * gl_LightSource[i].diffuse * rPhase * rScatterInt[i] * len/3.0;
 
