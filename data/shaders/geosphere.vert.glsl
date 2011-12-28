@@ -23,26 +23,42 @@ void main(void)
 	gl_TexCoord[2] = vec4(tnorm.x, tnorm.y, tnorm.z, 0.0);
 
 	// set gl_TexCoord[3][i] to the effective intensity of light i:
-	vec3 v = (gl_TexCoord[1] - geosphereCenter)/geosphereRadius;
+	vec4 gc = vec4(geosphereCenter.x, geosphereCenter.y, geosphereCenter.z, 0.0);
+	vec4 v = (gl_TexCoord[1] - gc)/geosphereRadius;
 	float lenInvSq = 1.0/(length(v)*length(v));
-	for (int i=0; i<NUM_LIGHTS; i++) {
-		vec3 lightDir = normalize(gl_LightSource[i].position - geosphereCenter);
+	mat4 lightDir = mat4(0.0);
+	for (int i=0; i<NUM_LIGHTS; ++i)
+		lightDir[i] = normalize(gl_LightSource[i].position - (geosphereCenter.x,geosphereCenter.y,geosphereCenter.z,0.0));
 
-		// Handle self-shadowing, i.e. "night".
-		// d = dot(lightDir,t) where t is the unique point on the unit sphere whose tangent plane
-		// contains v, is in the plane of lightDir and d, and is towards the light.
-		float perp = dot(lightDir,v);
-		float d = perp*lenInvSq + sqrt((1-lenInvSq)*(1-(perp*perp*lenInvSq)));
-		if (lightDiscRadii[i] < 0.0)
-			gl_TexCoord[3][i] = 1.0;
-		else
-			// Just linearly interpolate (the correct calculation involves
-			// asin, which isn't so cheap)
-			gl_TexCoord[3][i] = clamp(d / (2*lightDiscRadii[i]) + 0.5, 0.0, 1.0);
+	vec4 y = v * lightDir;
+	// Handle self-shadowing, i.e. "night".
+	// d[i] = dot(lightDir[i],t[i]) where t[i] is the unique point on the unit sphere whose tangent
+	// plane contains v, is in the plane of lightDir[i] and d, and is towards the light.
+	vec4 d = y*lenInvSq + sqrt((1.0-lenInvSq)*(1.0-(y*y*lenInvSq)));
+	vec4 lightIntensity = max(vec4(lessThan(lightDiscRadii, 0.0)), clamp(d / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0));
 
-		if (i == occultedLight)
-			// Apply eclipse:
-			// TODO: should be branching in a way the shader compiler can understand (uniform bool? diff shader?)
-			gl_TexCoord[3][i]*=intensityOfOccultedLight(lightDir, v, occultCentre, srad, lrad, maxOcclusion);
+	float trad = srad+lrad;
+	float absdiff = abs(srad-lrad);
+	if (occultedLight == 0) {
+		float dist = length(v - occultCentre - y[0]*lightDir[0] );
+		lightIntensity[0] *= (1.0 - mix(0.0, maxOcclusion,
+					clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
 	}
+	if (occultedLight == 1) {
+		float dist = length(v - occultCentre - y[1]*lightDir[1] );
+		lightIntensity[1] *= (1.0 - mix(0.0, maxOcclusion,
+					clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
+	}
+	if (occultedLight == 2) {
+		float dist = length(v - occultCentre - y[2]*lightDir[2] );
+		lightIntensity[2] *= (1.0 - mix(0.0, maxOcclusion,
+					clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
+	}
+	if (occultedLight == 3) {
+		float dist = length(v - occultCentre - y[3]*lightDir[3] );
+		lightIntensity[3] *= (1.0 - mix(0.0, maxOcclusion,
+					clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
+	}
+
+	gl_TexCoord[3] = lightIntensity;
 }
