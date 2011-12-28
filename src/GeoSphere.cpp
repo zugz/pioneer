@@ -43,7 +43,7 @@ SHADER_CLASS_BEGIN(GeosphereShader)
 	SHADER_UNIFORM_INT(useSecondary)
 SHADER_CLASS_END()
 
-static GeosphereShader *s_geosphereSurfaceShader[4], *s_geosphereSkyShader[4], *s_geosphereStarShader, *s_geosphereDimStarShader[4];
+static GeosphereShader *s_geosphereSurfaceShader[4], *s_geosphereSurfaceScatterShader[4], *s_geosphereSkyShader[4], *s_geosphereStarShader, *s_geosphereDimStarShader[4];
 
 #pragma pack(4)
 struct VBOVertex
@@ -1060,14 +1060,14 @@ int GeoSphere::UpdateLODThread(void *data)
 
 void GeoSphere::Init()
 {
-	s_geosphereSurfaceShader[0] = new GeosphereShader("geosphere_scatter", "#define GROUND\n#define NUM_LIGHTS 1\n");
-	s_geosphereSurfaceShader[1] = new GeosphereShader("geosphere_scatter", "#define GROUND\n#define NUM_LIGHTS 2\n");
-	s_geosphereSurfaceShader[2] = new GeosphereShader("geosphere_scatter", "#define GROUND\n#define NUM_LIGHTS 3\n");
-	s_geosphereSurfaceShader[3] = new GeosphereShader("geosphere_scatter", "#define GROUND\n#define NUM_LIGHTS 4\n");
-	//s_geosphereSurfaceShader[0] = new GeosphereShader("geosphere", "#define NUM_LIGHTS 1\n");
-	//s_geosphereSurfaceShader[1] = new GeosphereShader("geosphere", "#define NUM_LIGHTS 2\n");
-	//s_geosphereSurfaceShader[2] = new GeosphereShader("geosphere", "#define NUM_LIGHTS 3\n");
-	//s_geosphereSurfaceShader[3] = new GeosphereShader("geosphere", "#define NUM_LIGHTS 4\n");
+	s_geosphereSurfaceScatterShader[0] = new GeosphereShader("geosphere_scatter", "#define GROUND\n#define NUM_LIGHTS 1\n");
+	s_geosphereSurfaceScatterShader[1] = new GeosphereShader("geosphere_scatter", "#define GROUND\n#define NUM_LIGHTS 2\n");
+	s_geosphereSurfaceScatterShader[2] = new GeosphereShader("geosphere_scatter", "#define GROUND\n#define NUM_LIGHTS 3\n");
+	s_geosphereSurfaceScatterShader[3] = new GeosphereShader("geosphere_scatter", "#define GROUND\n#define NUM_LIGHTS 4\n");
+	s_geosphereSurfaceShader[0] = new GeosphereShader("geosphere", "#define NUM_LIGHTS 1\n");
+	s_geosphereSurfaceShader[1] = new GeosphereShader("geosphere", "#define NUM_LIGHTS 2\n");
+	s_geosphereSurfaceShader[2] = new GeosphereShader("geosphere", "#define NUM_LIGHTS 3\n");
+	s_geosphereSurfaceShader[3] = new GeosphereShader("geosphere", "#define NUM_LIGHTS 4\n");
 	s_geosphereSkyShader[0] = new GeosphereShader("geosphere_scatter", "#define NUM_LIGHTS 1\n");
 	s_geosphereSkyShader[1] = new GeosphereShader("geosphere_scatter", "#define NUM_LIGHTS 2\n");
 	s_geosphereSkyShader[2] = new GeosphereShader("geosphere_scatter", "#define NUM_LIGHTS 3\n");
@@ -1396,7 +1396,8 @@ void GeoSphere::Render(vector3d campos, const float radius, const float scale) {
 			Render::State::UseProgram(shader);
 		} else if (m_sbody->GetSuperType() == SBody::SUPERTYPE_STAR) Render::State::UseProgram(s_geosphereStarShader);
 		else {
-			GeosphereShader *shader = s_geosphereSurfaceShader[Render::State::GetNumLights()-1];
+			GeosphereShader *shader = (Pi::surfaceScatteringShader ? s_geosphereSurfaceScatterShader : s_geosphereSurfaceShader)
+				[Render::State::GetNumLights()-1];
 			Render::State::UseProgram(shader);
 			shader->set_geosphereScale(scale);
 			shader->set_geosphereAtmosTopRad(atmosRadius*radius/scale);

@@ -128,6 +128,7 @@ GLUquadric *Pi::gluQuadric;
 #if DEVKEYS
 bool Pi::showDebugInfo;
 bool Pi::useSecondary=true;
+bool Pi::surfaceScatteringShader=false;
 #endif
 int Pi::statSceneTris;
 GameConfig Pi::config(GetPiUserDir() + "config.ini");
@@ -698,8 +699,11 @@ void Pi::HandleEvents()
 						case SDLK_i: // Toggle Debug info
 							Pi::showDebugInfo = !Pi::showDebugInfo;
 							break;
-						case SDLK_y: // Toggle Debug info
+						case SDLK_b:
 							Pi::useSecondary = !Pi::useSecondary;
+							break;
+						case SDLK_g:
+							Pi::surfaceScatteringShader = !Pi::surfaceScatteringShader;
 							break;
 						case SDLK_m:  // Gimme money!
 							if(Pi::game) {

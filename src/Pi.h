@@ -135,6 +135,7 @@ public:
 #if DEVKEYS
 	static bool showDebugInfo;
 	static bool useSecondary;
+	static bool surfaceScatteringShader;
 #endif
 	static Player *player;
 	static SectorView *sectorView;

@@ -14,6 +14,8 @@ uniform float srad;
 uniform float lrad;
 uniform float maxOcclusion;
 
+uniform int useSecondary;
+
 varying vec4 varyingEyepos;
 
 varying vec4 rCol;
@@ -104,22 +106,24 @@ void main(void)
 	float rScatAtmosInt = 0.0;
 	float mScatAtmosInt = 0.0;
 
-	float atmosNear;
-	float atmosFar;
-	sphereEntryExitDist(atmosNear, atmosFar, geosphereCenter, eyepos, geosphereAtmosTopRad);
-	atmosFar = min(atmosFar, length(eyepos));
-	
-	vec3 eyedir = normalize(eyepos);
-	vec3 a0 = (atmosFar*eyedir - geosphereCenter) / geosphereRadius;
-	vec3 b0 = (atmosNear*eyedir - geosphereCenter) / geosphereRadius;
+	vec4 a,b;
+	{
+		float atmosNear;
+		float atmosFar;
+		sphereEntryExitDist(atmosNear, atmosFar, geosphereCenter, eyepos, geosphereAtmosTopRad);
+		atmosFar = min(atmosFar, length(eyepos));
 
-	vec4 a = vec4(a0.x,a0.y,a0.z,0.0);
-	vec4 b = vec4(b0.x,b0.y,b0.z,0.0);
+		vec3 eyedir = normalize(eyepos);
+		vec3 a0 = (atmosFar*eyedir - geosphereCenter) / geosphereRadius;
+		vec3 b0 = (atmosNear*eyedir - geosphereCenter) / geosphereRadius;
+		a = vec4(a0.x,a0.y,a0.z,0.0);
+		b = vec4(b0.x,b0.y,b0.z,0.0);
+	}
 
 	// N: steps in our numerical integration. Must be even, since we use
 	// Simpson's rule. TODO: vary according to distance relative to 1/ADF?
 #ifdef GROUND
-	const int N = 6;
+	const int N = 4;
 #else
 	const int N = 10;
 #endif
@@ -162,35 +166,37 @@ void main(void)
 		vec4 d = y*lenInvSq + sqrt((1.0-lenInvSq)*(1.0-(y*y*lenInvSq)));
 		vec4 lightIntensity = clamp(d / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0);
 
-		vec4 secondaryLightIntensity = clamp(d / (2.0*(lightDiscRadii+2.0/rADF)) + 0.5, 0.0, 1.0);
+		vec4 secondaryLightIntensity = 0.0;
+		if (useSecondary == 1)
+			secondaryLightIntensity = clamp(d / (2.0*(lightDiscRadii+2.0/rADF)) + 0.5, 0.0, 1.0);
 
 		if (occultedLight == 0) {
 			float dist = length(p - occultCentre - y[0]*lightDir[0] );
 			lightIntensity[0] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
-			secondaryLightIntensity[0] *= (1.0 - mix(0.0, maxOcclusion,
-						clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
+				secondaryLightIntensity[0] *= (1.0 - mix(0.0, maxOcclusion,
+							clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
 		}
 		else if (occultedLight == 1) {
 			float dist = length(p - occultCentre - y[1]*lightDir[1] );
 			lightIntensity[1] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
-			secondaryLightIntensity[1] *= (1.0 - mix(0.0, maxOcclusion,
-						clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
+				secondaryLightIntensity[1] *= (1.0 - mix(0.0, maxOcclusion,
+							clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
 		}
 		else if (occultedLight == 2) {
 			float dist = length(p - occultCentre - y[2]*lightDir[2] );
 			lightIntensity[2] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
-			secondaryLightIntensity[2] *= (1.0 - mix(0.0, maxOcclusion,
-						clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
+				secondaryLightIntensity[2] *= (1.0 - mix(0.0, maxOcclusion,
+							clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
 		}
 		else if (occultedLight == 3) {
 			float dist = length(p - occultCentre - y[3]*lightDir[3] );
 			lightIntensity[3] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
-			secondaryLightIntensity[3] *= (1.0 - mix(0.0, maxOcclusion,
-						clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
+				secondaryLightIntensity[3] *= (1.0 - mix(0.0, maxOcclusion,
+							clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
 		}
 
 		mat4 rScatter;
@@ -206,23 +212,22 @@ void main(void)
 		rScatterInt += rScatter * simpson;
 		mScatterInt += mScatter * simpson;
 
-		{
-		// XXX: Entirely ad hoc secondary scatter: split into two components, from below and
-		// from above, and in each case just integrate along a line, using density 1/ADF away as
-		// estimate of average... there's no good theoretical reasoning behind this, but it
-		// seems to work! 
 		vec4 secondaryScatter = vec4(0.0);
-		float rse1 = exp(min(0.0,-(rADF*(r-1.0)-1.0)));
-		float rse2 = exp(-(rADF*(r-1.0)+1.0));
-		secondaryScatter += rse1*exp(-rse1*(1.0/rADF)*rextinction)*rc * (r-1.0);
-		float outer = 1.0 + 6.0/rADF;
-		if (r < outer)
-			secondaryScatter += rse2*exp(-rse2*(1.0/rADF)*rextinction)*rc * (outer-r);
+		if (useSecondary == 1)
+		{
+			// XXX: Entirely ad hoc secondary scatter: split into two components, from below and
+			// from above, and in each case just integrate along a line, using density 1/ADF away as
+			// estimate of average... there's no good theoretical reasoning behind this, but it
+			// seems to work!  FIXME: should include Mie for attenuation at least
+			float rse1 = exp(min(0.0,-(rADF*(r-1.0)-1.0)));
+			float rse2 = exp(-(rADF*(r-1.0)+1.0));
+			secondaryScatter += rse1*exp(-rse1*(1.0/rADF)*rextinction)*rc * (r-1.0);
+			float outer = 1.0 + 6.0/rADF;
+			if (r < outer)
+				secondaryScatter += rse2*exp(-rse2*(1.0/rADF)*rextinction)*rc * (outer-r);
 
-		extraIn += (len/3.0) * rc * re * simpson * secondaryScatter * secondaryLightIntensity[0] * attenuation[0] * gl_LightSource[0].diffuse;
-		extraIn += (len/3.0) * rc * re * simpson * secondaryScatter * secondaryLightIntensity[1] * attenuation[1] * gl_LightSource[1].diffuse;
-		extraIn += (len/3.0) * rc * re * simpson * secondaryScatter * secondaryLightIntensity[2] * attenuation[2] * gl_LightSource[2].diffuse;
-		extraIn += (len/3.0) * rc * re * simpson * secondaryScatter * secondaryLightIntensity[3] * attenuation[3] * gl_LightSource[3].diffuse;
+			extraIn += simpson * (len/3.0) * re * rc * secondaryScatter * (matrixCompMult(attenuation, lightDiffuse) * secondaryLightIntensity);
+		}
 
 #ifdef GROUND
 		if (j==N) {
@@ -233,7 +238,6 @@ void main(void)
 			extraIn += gl_Color * (direct[3] + secondaryLightIntensity[3] * secondaryScatter) * attenuation[3] * lightDiffuse[3];
 		}
 #endif
-		}
 	}
 
 	rCol = 0.0;
@@ -246,11 +250,12 @@ void main(void)
 		// We also just multiply up the value by an ad hoc factor. We could try to excuse this by
 		// saying it accounts for multiple scatter, but I've no reason other than subjective
 		// judgement of results to think it physically realistic!
-		const float hackFactor = 5.0; // <--- XXX HACK XXX
-		rCol += rc * hackFactor * gl_LightSource[i].diffuse * rPhase * rScatterInt[i] * len/3.0;
+		const float rhackFactor = 5.0; // <--- XXX HACK XXX
+		rCol += rc * rhackFactor * gl_LightSource[i].diffuse * rPhase * rScatterInt[i] * len/3.0;
 
+		const float mhackFactor = 4.0; // <--- XXX HACK XXX
 		// Mie scattering, meanwhile, is highly direction-dependent, so we
 		// calculate the phase function in the fragment shader.
-		mCol[i] = mc * gl_LightSource[i].diffuse * mScatterInt[i] * len/3.0;
+		mCol[i] = mc * mhackFactor * gl_LightSource[i].diffuse * mScatterInt[i] * len/3.0;
 	}
 }
