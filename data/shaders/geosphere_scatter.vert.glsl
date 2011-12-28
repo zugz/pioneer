@@ -14,8 +14,6 @@ uniform float srad;
 uniform float lrad;
 uniform float maxOcclusion;
 
-uniform int useSecondary;
-
 varying vec4 varyingEyepos;
 
 varying vec4 rCol;
@@ -102,7 +100,6 @@ void main(void)
 	// vertex
 	mat4 rScatterInt = mat4(0.0);
 	mat4 mScatterInt = mat4(0.0);
-	vec4 secondaryScatterInt = vec4(0.0);
 	extraIn = vec4(0.0);
 	float rScatAtmosInt = 0.0;
 	float mScatAtmosInt = 0.0;
@@ -114,7 +111,7 @@ void main(void)
 	
 	vec3 eyedir = normalize(eyepos);
 	vec3 a0 = (atmosFar*eyedir - geosphereCenter) / geosphereRadius;
-	vec3 b0 = (- geosphereCenter) / geosphereRadius;
+	vec3 b0 = (atmosNear*eyedir - geosphereCenter) / geosphereRadius;
 
 	vec4 a = vec4(a0.x,a0.y,a0.z,0.0);
 	vec4 b = vec4(b0.x,b0.y,b0.z,0.0);
@@ -196,25 +193,6 @@ void main(void)
 						clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
 		}
 
-		if (useSecondary == 1) {
-			// XXX: Entirely ad hoc secondary scatter: split into two components, from below and
-			// from above, and in each case just integrate along a line, using density 1/ADF away as
-			// estimate of average... there's no good theoretical reasoning behind this, but it
-			// seems to work! 
-			vec4 secondaryScatter = vec4(0.0);
-			float rse1 = exp(min(0.0,-(rADF*(r-1.0)-1.0)));
-			float rse2 = exp(-(rADF*(r-1.0)+1.0));
-			secondaryScatter += rc * re * rse1*exp(-rse1*(1.0/rADF)*rextinction)*rc * (r-1.0);
-			float outer = 1.0 + 6.0/rADF;
-			if (r < outer)
-				secondaryScatter += rc * re * rse2*exp(-rse2*(1.0/rADF)*rextinction)*rc * (outer-r);
-
-			secondaryScatterInt += simpson * secondaryScatter * secondaryLightIntensity[0] * attenuation[0] * gl_LightSource[0].diffuse;
-			secondaryScatterInt += simpson * secondaryScatter * secondaryLightIntensity[1] * attenuation[1] * gl_LightSource[1].diffuse;
-			secondaryScatterInt += simpson * secondaryScatter * secondaryLightIntensity[2] * attenuation[2] * gl_LightSource[2].diffuse;
-			secondaryScatterInt += simpson * secondaryScatter * secondaryLightIntensity[3] * attenuation[3] * gl_LightSource[3].diffuse;
-		}
-
 		mat4 rScatter;
 		mat4 mScatter;
 		rScatter[0] = attenuation[0] * lightIntensity[0] * re;
@@ -228,14 +206,34 @@ void main(void)
 		rScatterInt += rScatter * simpson;
 		mScatterInt += mScatter * simpson;
 
+		{
+		// XXX: Entirely ad hoc secondary scatter: split into two components, from below and
+		// from above, and in each case just integrate along a line, using density 1/ADF away as
+		// estimate of average... there's no good theoretical reasoning behind this, but it
+		// seems to work! 
+		vec4 secondaryScatter = vec4(0.0);
+		float rse1 = exp(min(0.0,-(rADF*(r-1.0)-1.0)));
+		float rse2 = exp(-(rADF*(r-1.0)+1.0));
+		secondaryScatter += rse1*exp(-rse1*(1.0/rADF)*rextinction)*rc * (r-1.0);
+		float outer = 1.0 + 6.0/rADF;
+		if (r < outer)
+			secondaryScatter += rse2*exp(-rse2*(1.0/rADF)*rextinction)*rc * (outer-r);
+
+		extraIn += (len/3.0) * rc * re * simpson * secondaryScatter * secondaryLightIntensity[0] * attenuation[0] * gl_LightSource[0].diffuse;
+		extraIn += (len/3.0) * rc * re * simpson * secondaryScatter * secondaryLightIntensity[1] * attenuation[1] * gl_LightSource[1].diffuse;
+		extraIn += (len/3.0) * rc * re * simpson * secondaryScatter * secondaryLightIntensity[2] * attenuation[2] * gl_LightSource[2].diffuse;
+		extraIn += (len/3.0) * rc * re * simpson * secondaryScatter * secondaryLightIntensity[3] * attenuation[3] * gl_LightSource[3].diffuse;
+
 #ifdef GROUND
 		if (j==N) {
-			vec3 tnorm = gl_NormalMatrix * gl_Normal;
-			vec4 nDotVP = max(0.0, vec4(normalize(tnorm),0.0) * lightDir);
-			extraIn += gl_Color * ( matrixCompMult(attenuation,lightDiffuse) * (lightIntensity * nDotVP) );
-			//extraIn += (attenuation[0] * lightDiffuse[0]) * (lightIntensity[0] * nDotVP[0] * gl_Color);
+			vec4 direct = lightIntensity * max(0.0, vec4(normalize(gl_NormalMatrix * gl_Normal),0.0) * lightDir);
+			extraIn += gl_Color * (direct[0] + secondaryLightIntensity[0] * secondaryScatter) * attenuation[0] * lightDiffuse[0];
+			extraIn += gl_Color * (direct[1] + secondaryLightIntensity[1] * secondaryScatter) * attenuation[1] * lightDiffuse[1];
+			extraIn += gl_Color * (direct[2] + secondaryLightIntensity[2] * secondaryScatter) * attenuation[2] * lightDiffuse[2];
+			extraIn += gl_Color * (direct[3] + secondaryLightIntensity[3] * secondaryScatter) * attenuation[3] * lightDiffuse[3];
 		}
 #endif
+		}
 	}
 
 	rCol = 0.0;
@@ -255,5 +253,4 @@ void main(void)
 		// calculate the phase function in the fragment shader.
 		mCol[i] = mc * gl_LightSource[i].diffuse * mScatterInt[i] * len/3.0;
 	}
-	extraIn += secondaryScatterInt * len/3.0;
 }
