@@ -1060,14 +1060,18 @@ int GeoSphere::UpdateLODThread(void *data)
 
 void GeoSphere::Init()
 {
-	s_geosphereSurfaceShader[0] = new GeosphereShader("geosphere", "#define NUM_LIGHTS 1\n");
-	s_geosphereSurfaceShader[1] = new GeosphereShader("geosphere", "#define NUM_LIGHTS 2\n");
-	s_geosphereSurfaceShader[2] = new GeosphereShader("geosphere", "#define NUM_LIGHTS 3\n");
-	s_geosphereSurfaceShader[3] = new GeosphereShader("geosphere", "#define NUM_LIGHTS 4\n");
-	s_geosphereSkyShader[0] = new GeosphereShader("geosphere_sky", "#define NUM_LIGHTS 1\n");
-	s_geosphereSkyShader[1] = new GeosphereShader("geosphere_sky", "#define NUM_LIGHTS 2\n");
-	s_geosphereSkyShader[2] = new GeosphereShader("geosphere_sky", "#define NUM_LIGHTS 3\n");
-	s_geosphereSkyShader[3] = new GeosphereShader("geosphere_sky", "#define NUM_LIGHTS 4\n");
+	s_geosphereSurfaceShader[0] = new GeosphereShader("geosphere_scatter", "#define GROUND\n#define NUM_LIGHTS 1\n");
+	s_geosphereSurfaceShader[1] = new GeosphereShader("geosphere_scatter", "#define GROUND\n#define NUM_LIGHTS 2\n");
+	s_geosphereSurfaceShader[2] = new GeosphereShader("geosphere_scatter", "#define GROUND\n#define NUM_LIGHTS 3\n");
+	s_geosphereSurfaceShader[3] = new GeosphereShader("geosphere_scatter", "#define GROUND\n#define NUM_LIGHTS 4\n");
+	//s_geosphereSurfaceShader[0] = new GeosphereShader("geosphere", "#define NUM_LIGHTS 1\n");
+	//s_geosphereSurfaceShader[1] = new GeosphereShader("geosphere", "#define NUM_LIGHTS 2\n");
+	//s_geosphereSurfaceShader[2] = new GeosphereShader("geosphere", "#define NUM_LIGHTS 3\n");
+	//s_geosphereSurfaceShader[3] = new GeosphereShader("geosphere", "#define NUM_LIGHTS 4\n");
+	s_geosphereSkyShader[0] = new GeosphereShader("geosphere_scatter", "#define NUM_LIGHTS 1\n");
+	s_geosphereSkyShader[1] = new GeosphereShader("geosphere_scatter", "#define NUM_LIGHTS 2\n");
+	s_geosphereSkyShader[2] = new GeosphereShader("geosphere_scatter", "#define NUM_LIGHTS 3\n");
+	s_geosphereSkyShader[3] = new GeosphereShader("geosphere_scatter", "#define NUM_LIGHTS 4\n");
 	s_geosphereStarShader = new GeosphereShader("geosphere_star");
 	s_geosphereDimStarShader[0] = new GeosphereShader("geosphere_star", "#define DIM\n#define NUM_LIGHTS 1\n");
 	s_geosphereDimStarShader[1] = new GeosphereShader("geosphere_star", "#define DIM\n#define NUM_LIGHTS 2\n");
