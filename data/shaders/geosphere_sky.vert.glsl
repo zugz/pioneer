@@ -57,7 +57,7 @@ void main(void)
 	sphereEntryExitDist(skyNear, skyFar, geosphereCenter, eyepos, geosphereAtmosTopRad);
 	vec3 eyedir = normalize(eyepos);
 	vec3 a0 = (skyNear * eyedir - geosphereCenter) / geosphereRadius;
-	vec3 b0 = (skyFar * eyedir - geosphereCenter) / geosphereRadius;
+	vec3 b0 = (min(length(eyepos), skyFar) * eyedir - geosphereCenter) / geosphereRadius;
 
 	vec4 a = vec4(a0.x,a0.y,a0.z,0.0);
 	vec4 b = vec4(b0.x,b0.y,b0.z,0.0);
@@ -98,7 +98,7 @@ void main(void)
 
 	mat4 lightDir = mat4(0.0);
 	for (int i=0; i<NUM_LIGHTS; ++i)
-		lightDir[i] = normalize(gl_LightSource[i].position - (geosphereCenter.x,geosphereCenter.y,geosphereCenter.z,0.0));
+		lightDir[i] = normalize(gl_LightSource[i].position);
 
 	float trad = srad+lrad;
 	float absdiff = abs(srad-lrad);
