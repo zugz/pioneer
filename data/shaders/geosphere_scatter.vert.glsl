@@ -62,14 +62,14 @@ void main(void)
 	// Bruneton and Neyret 2008
 	//
 	// Rayleigh scattering for gases, Mie for aerosols.
-	const vec4 gasScatteringSeaLevel = vec4(5.8,13.5,33.1,0)*pow(10,-6);
+	const vec4 gasScatteringSeaLevel = vec4(5.8e-6,13.5e-6,33.1e-6,0);
 	// rADF = planetRadius / gasScaleHeight
 	const float rADF = 795.0;
 	vec4 rc = scale*gasScatteringSeaLevel;
 	vec4 rAbsorption = vec4(0.0);
 	vec4 rextinction = rc + rAbsorption;
 
-	const float particleScatteringSeaLevel = 20*pow(10,-6);
+	const float particleScatteringSeaLevel = 20e-6;
 	// rADF = planetRadius / particleScaleHeight
 	const float mADF = 5295.0;
 	float mc = scale*particleScatteringSeaLevel;
@@ -227,12 +227,17 @@ void main(void)
 			// from above, and in each case just integrate along a line, using density 1/ADF away as
 			// estimate of average... there's no good theoretical reasoning behind this, but it
 			// seems to work!  FIXME: should include Mie for attenuation at least
-			float rse1 = exp(min(0.0,-(rADF*(r-1.0)-1.0)));
-			float rse2 = exp(-(rADF*(r-1.0)+1.0));
-			secondaryScatter += rse1*exp(-rse1*(1.0/rADF)*rextinction)*rc * (r-1.0);
+			vec4 secondaryScatter = vec4(0.0);
+			float samp1 = max(0.0,r-1.0/rADF-1.0);
+			float samp2 = r+1.0/rADF;
+			float rse1 = exp(-(rADF*samp1));
+			float rse2 = exp(-(rADF*samp2));
+			float mse1 = exp(-(mADF*samp1));
+			float mse2 = exp(-(mADF*samp2));
+			secondaryScatter += exp(-(rse1*(r-1)*rextinction + mse1*(r-1)*mextinction)) * (rc * re + mc * me) * (r-1.0);
 			float outer = 1.0 + 6.0/rADF;
 			if (r < outer)
-				secondaryScatter += rse2*exp(-rse2*(1.0/rADF)*rextinction)*rc * (outer-r);
+				secondaryScatter += exp(-(rse2*(outer-r)*rextinction + mse2*(r-1)*mextinction)) * (rc * re + mc * me) * (outer-r);
 
 			extraIn += simpson * (len/3.0) * re * rc * secondaryScatter * (matrixCompMult(attenuation, lightDiffuse) * secondaryLightIntensity);
 		}
