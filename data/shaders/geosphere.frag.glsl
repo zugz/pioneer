@@ -41,7 +41,7 @@ void main(void)
 {
 	vec3 eyepos = vec3(gl_TexCoord[1]);
 	vec3 tnorm = normalize(vec3(gl_TexCoord[2]));
-	vec4 diff = vec4(0.0);
+	vec4 total = vec4(0.0);
 
 	float scale = geosphereScale*geosphereRadius;
 
@@ -117,6 +117,9 @@ void main(void)
 	float vz2 = 1.0 - abs(vy2)/r2;
 	float vlt1 = vy1<0.0 ? 1.0 : 0.0;
 	float vlt2 = vy2<0.0 ? 1.0 : 0.0;
+	// TODO: could probably optimise this by using flat earth hypothesis, and
+	// corresponding analytic solution to the integral, when the view point is
+	// low enough, and when we're in space noting that the negative term is 0.
 	float rViewAtmosInt = 
 		re2 * ( rTangentInt*vlt2 + (1.0-2.0*vlt2) *
 				exp(rconstcoeff + vz2*(rcoeffs[0] + vz2*(rcoeffs[1] + vz2*(rcoeffs[2] + vz2*rcoeffs[3])))) / rADF)
@@ -135,6 +138,17 @@ void main(void)
 	vec4 d = ly*lenInvSq + sqrt((1.0-lenInvSq)*(1.0-(ly*ly*lenInvSq)));
 	vec4 lightIntensity = clamp(d / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0);
 
+	vec4 secondaryScatter = vec4(0.0);
+	if (useSecondary == 1)
+	{
+		vec4 secondaryScatter = vec4(0.0);
+		float samp2 = r2+1.0/rADF;
+		float rse = exp(-(rADF*samp2));
+		float mse = exp(-(mADF*samp2));
+		float outer = 1.0 + 6.0/rADF;
+		secondaryScatter += exp(-(rse*(outer-r2)*rextinction + mse*(r2-1)*mextinction)) * (rc * re2 + mc * me2) * (outer-r2);
+	}
+
 	for (int i=0; i<NUM_LIGHTS; ++i) {
 		if (occultedLight == i) {
 			float dist = length(b - occultCentre - ly[i]*lightDir[i] );
@@ -146,25 +160,56 @@ void main(void)
 		vec4 outAttenuation = exp(-(rViewAtmosInt*rextinction + mViewAtmosInt*mextinction));
 
 		float nDotVP = max(0.0, dot(tnorm, lightDir[i]));
-		diff += inAttenuation * gl_Color * lightDiffuse[i] * nDotVP * outAttenuation;
+		total += inAttenuation * gl_Color * lightDiffuse[i] * (nDotVP + PI * secondaryScatter) * outAttenuation;
 
-		if (dot(outAttenuation,outAttenuation) < 0.8) {
+		if (dot(outAttenuation,vec4(1.0,1.0,1.0,0.0)) < 2.9) {
 			// aerial perspective - we can't afford to do a numerical
 			// integration, so we make a very rough estimate:
+			// Problem: currenttly far too rough! If we're e.g. looking at the
+			// top of a high mountain from sea level, we have a large optical
+			// depth but the in-attenuation at our sample point half the way
+			// up is quite low; result is a ludicrously brightly blue
+			// mountain.
+			// Ideas for solution: 
+			// (i) Use flat earth hypothesis and corresponding analytic
+			// solution to the integral when we have such a situation.
+			// Issue: we don't get an analytic solution when we have two
+			// different scale heights, which we do have.
+			// But: what it gives should be quite cheap to numberically
+			// integrate.
+			//
+			// (ii) Do a numerical integration as in the sky case, but only
+			// when we have reason to think it necessary.
+			// Issue: with a sufficiently dense atmosphere, it will be common
+			// for it to be necessary.
 			vec3 ap = (a+b)/2.0;
 			float ar = length(ap);
-			float me = exp(-mADF*(ar-1.0));
+			float are = exp(-rADF*(ar-1.0));
+			float ame = exp(-mADF*(ar-1.0));
+
+			float ay = dot(ap, lightDir[i]);
+			float az = 1.0 - abs(ay)/ar;
+			float alt = ay<0.0 ? 1.0 : 0.0;
+			float raint = are * ( rTangentInt*alt + (1.0-2.0*alt) *
+						exp(rconstcoeff + az*(rcoeffs[0] + az*(rcoeffs[1] + az*(rcoeffs[2] + az*rcoeffs[3])))) / rADF);
+			float maint = ame * ( mTangentInt*alt + (1.0-2.0*alt) *
+						exp(mconstcoeff + az*(mcoeffs[0] + az*(mcoeffs[1] + az*(mcoeffs[2] + az*mcoeffs[3])))) / mADF);
+
+			vec4 ainAttenuation = lightIntensity[i] *
+				exp(-(raint*rextinction + maint*mextinction));
 
 			float mu = dot(eyedir,lightDir[i]);
 
+			const float rPhase = 1.0/(4.0*PI);
+			const float rhackFactor = 1.0; // <--- XXX HACK XXX
+			total += rhackFactor * ainAttenuation * PI * (lightDiffuse[i] + secondaryScatter) * (rc * rViewAtmosInt) * rPhase
+				* outAttenuation;
+
 			// taken from Bruneton (loc. cit.):
 			float mPhase = (3.0/(8.0*PI)) * ( (1.0-g*g)*(1.0+mu*mu) ) / ( (2.0+g*g)*pow(1.0+g*g-2.0*g*mu, 1.5));
-			const float mhackFactor = 2.0; // <--- XXX HACK XXX
-			diff += mhackFactor * inAttenuation * lightDiffuse[i] * (mc * mViewAtmosInt/2.0) * mPhase;
-
-			const float rPhase = 1.0/(4.0*PI);
-			const float rhackFactor = 5.0; // <--- XXX HACK XXX
-			diff += rhackFactor * inAttenuation * lightDiffuse[i] * (rc * rViewAtmosInt/2.0) * rPhase;
+			const float mhackFactor = 1.0; // <--- XXX HACK XXX
+			total += mhackFactor * ainAttenuation * PI * (lightDiffuse[i] + secondaryScatter) * (mc * mViewAtmosInt) * mPhase
+				* outAttenuation;
 		}
 	}
 	
@@ -372,7 +417,7 @@ void main(void)
 	//}
 	//atmosDiffuse.a = 1.0;
 //	float sun = dot(normalize(eyepos),normalize(vec3(gl_LightSource[0].position)));
-	gl_FragColor = diff*gl_Color + gl_LightModel.ambient*gl_Color +
+	gl_FragColor = total + gl_LightModel.ambient*gl_Color +
 		//(1.0-fogFactor)*(atmosDiffuse*atmosColor) +
 		gl_FrontMaterial.emission;
 

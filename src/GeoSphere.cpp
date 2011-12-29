@@ -1406,6 +1406,7 @@ void GeoSphere::Render(vector3d campos, const float radius, const float scale) {
 			shader->set_geosphereCenter(center.x, center.y, center.z);
 			shader->set_geosphereRadius(radius/scale);
 			shader->set_lightDiscRadii(m_lightDiscRadii[0],m_lightDiscRadii[1],m_lightDiscRadii[2],m_lightDiscRadii[3]);
+			shader->set_useSecondary(Pi::useSecondary);
 			if (eclipse) {
 				shader->set_occultedLight(eclipse->lightNum);
 				shader->set_occultCentre(occultCentre[0], occultCentre[1], occultCentre[2],0);

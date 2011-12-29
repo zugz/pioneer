@@ -132,7 +132,7 @@ void main(void)
 	// having approximately correct continuation of atmospheric effects. Then
 	// we can use the same tricks for models.
 #ifdef GROUND
-	const int N = 4;
+	const int N = 10;
 #else
 	const int N = 10;
 #endif
@@ -143,8 +143,10 @@ void main(void)
 		float simpson = (j==0||j==N) ? 1.0 : (j == j/2*2) ? 2.0 : 4.0;
 		vec4 p = a+float(j)*d;
 		float r = length(p);
-		if (r < 0.99)
+#ifndef GROUND
+		if (r < 1.0)
 			continue;
+#endif
 
 		float re = exp(-rADF*(r-1.0));
 		float me = exp(-mADF*(r-1.0));
@@ -227,10 +229,10 @@ void main(void)
 			// XXX: Entirely ad hoc secondary scatter: split into two components, from below and
 			// from above, and in each case just integrate along a line, using density 1/ADF away as
 			// estimate of average... there's no good theoretical reasoning behind this, but it
-			// seems to work!  FIXME: should include Mie for attenuation at least
+			// seems to work!
 			vec4 secondaryScatter = vec4(0.0);
 			float samp1 = max(0.0,r-1.0/rADF-1.0);
-			float samp2 = r+1.0/rADF;
+			float samp2 = r+1.0/rADF-1.0;
 			float rse1 = exp(-(rADF*samp1));
 			float rse2 = exp(-(rADF*samp2));
 			float mse1 = exp(-(mADF*samp1));
@@ -240,17 +242,16 @@ void main(void)
 			if (r < outer)
 				secondaryScatter += exp(-(rse2*(outer-r)*rextinction + mse2*(r-1)*mextinction)) * (rc * re + mc * me) * (outer-r);
 
-			extraIn += simpson * (len/3.0) * re * rc * secondaryScatter * (matrixCompMult(attenuation, lightDiffuse) * secondaryLightIntensity);
+			extraIn += simpson * (len/3.0) * re * rc * PI * secondaryScatter * (matrixCompMult(attenuation, lightDiffuse) * secondaryLightIntensity);
 		}
 
 #ifdef GROUND
 		if (j==N) {
 			vec4 direct = lightIntensity * max(0.0, vec4(normalize(gl_NormalMatrix * gl_Normal),0.0) * lightDir);
-			extraIn += gl_Color * (direct[0] + secondaryLightIntensity[0] * secondaryScatter) * attenuation[0] * lightDiffuse[0];
-			extraIn += gl_Color * (direct[1] + secondaryLightIntensity[1] * secondaryScatter) * attenuation[1] * lightDiffuse[1];
-			extraIn += gl_Color * (direct[2] + secondaryLightIntensity[2] * secondaryScatter) * attenuation[2] * lightDiffuse[2];
-			extraIn += gl_Color * (direct[3] + secondaryLightIntensity[3] * secondaryScatter) * attenuation[3] * lightDiffuse[3];
-			extraIn = abs(extraIn);
+			extraIn += gl_Color * (direct[0] + secondaryLightIntensity[0] * PI * secondaryScatter) * attenuation[0] * lightDiffuse[0];
+			extraIn += gl_Color * (direct[1] + secondaryLightIntensity[1] * PI * secondaryScatter) * attenuation[1] * lightDiffuse[1];
+			extraIn += gl_Color * (direct[2] + secondaryLightIntensity[2] * PI * secondaryScatter) * attenuation[2] * lightDiffuse[2];
+			extraIn += gl_Color * (direct[3] + secondaryLightIntensity[3] * PI * secondaryScatter) * attenuation[3] * lightDiffuse[3];
 		}
 #endif
 	}
@@ -265,12 +266,12 @@ void main(void)
 		// We also just multiply up the value by an ad hoc factor. We could try to excuse this by
 		// saying it accounts for multiple scatter, but I've no reason other than subjective
 		// judgement of results to think it physically realistic!
-		const float rhackFactor = 5.0; // <--- XXX HACK XXX
-		rCol += rc * rhackFactor * gl_LightSource[i].diffuse * rPhase * rScatterInt[i] * len/3.0;
+		const float rhackFactor = 1.0; // <--- XXX HACK XXX
+		rCol += rc * rhackFactor * PI * gl_LightSource[i].diffuse * rPhase * rScatterInt[i] * len/3.0;
 
 		// Mie scattering, meanwhile, is highly direction-dependent, so we
 		// calculate the phase function in the fragment shader.
-		const float mhackFactor = 2.0; // <--- XXX HACK XXX
-		mCol[i] = mc * mhackFactor * gl_LightSource[i].diffuse * mScatterInt[i] * len/3.0;
+		const float mhackFactor = 1.0; // <--- XXX HACK XXX
+		mCol[i] = mc * mhackFactor * PI * gl_LightSource[i].diffuse * mScatterInt[i] * len/3.0;
 	}
 }
