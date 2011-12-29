@@ -24,6 +24,9 @@ void main(void) {
 
 	// For the Earth's atmosphere:
 	const float g = 0.76;
+	// NOTE: might be worth borrowing from Riley et al, who use the
+	// iterated self-convolution of the phase factor to represent multiple
+	// forward scattering.
 
 	atmosDiffuse = rCol;
 	for (int i=0; i<NUM_LIGHTS; ++i) {
@@ -35,6 +38,8 @@ void main(void) {
 		atmosDiffuse += mCol[i] * mPhase;
 	}
 	atmosDiffuse += extraIn;
+	const float lightHackFactor = 1.0; // <--- XXX HACK XXX
+	atmosDiffuse *= lightHackFactor;
 	atmosDiffuse.a = 1.0;
 	//float sun = max(0.0, dot(normalize(eyepos),normalize(vec3(gl_LightSource[0].position))));
 	gl_FragColor = atmosDiffuse;

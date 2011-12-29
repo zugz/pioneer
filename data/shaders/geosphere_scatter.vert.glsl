@@ -122,6 +122,14 @@ void main(void)
 
 	// N: steps in our numerical integration. Must be even, since we use
 	// Simpson's rule. TODO: vary according to distance relative to 1/ADF?
+	//
+	// More importantly: we can't do (all) ground here, there are just too
+	// many damned vertices for something this expensive. I'm currently
+	// thinking that we should instead do all ground on the frag shader,
+	// though still using vert for sky, with whatever crappy ad hoccities we
+	// can find to get aerial perspective working on the cheap while also
+	// having approximately correct continuation of atmospheric effects. Then
+	// we can use the same tricks for models.
 #ifdef GROUND
 	const int N = 4;
 #else
@@ -253,9 +261,9 @@ void main(void)
 		const float rhackFactor = 5.0; // <--- XXX HACK XXX
 		rCol += rc * rhackFactor * gl_LightSource[i].diffuse * rPhase * rScatterInt[i] * len/3.0;
 
-		const float mhackFactor = 4.0; // <--- XXX HACK XXX
 		// Mie scattering, meanwhile, is highly direction-dependent, so we
 		// calculate the phase function in the fragment shader.
+		const float mhackFactor = 4.0; // <--- XXX HACK XXX
 		mCol[i] = mc * mhackFactor * gl_LightSource[i].diffuse * mScatterInt[i] * len/3.0;
 	}
 }
