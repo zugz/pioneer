@@ -70,6 +70,8 @@ void main(void)
 	const vec4 mcoeffs = vec4( -3.808514, 25.688546, -48.801948, 29.360771 );
 	const float mconstcoeff = 1.464499;
 
+	const float g = 0.76;
+
 	// estimated atmosphere density integrals for whole line tangent to
 	// sphere:
 	const float rTangentInt = 2.0*exp(rconstcoeff+rcoeffs[0]+rcoeffs[1]+rcoeffs[2]+rcoeffs[3])/rADF;
@@ -85,6 +87,89 @@ void main(void)
 	float trad = srad+lrad;
 	float absdiff = abs(srad-lrad);
 
+	// when does the eye ray intersect atmosphere
+	float atmosDist = findSphereEyeRayEntryDistance(geosphereCenter, eyepos, geosphereAtmosTopRad);
+
+	vec3 eyedir = normalize(eyepos);
+	vec4 a = vec4(atmosDist*eyedir - geosphereCenter,0.0) / geosphereRadius;
+	vec4 b = vec4(eyepos - geosphereCenter,0.0) / geosphereRadius;
+
+	float r1 = length(a);
+	float r2 = length(b);
+	float re1 = exp(-rADF*(r1-1.0));
+	float me1 = exp(-mADF*(r1-1.0));
+	float re2 = exp(-rADF*(r2-1.0));
+	float me2 = exp(-mADF*(r2-1.0));
+
+	vec4 ly = b * lightDir;
+	vec4 lz = vec4(1.0) - abs(ly)/vec4(r2);
+	vec4 llt = vec4(lessThan(ly,vec4(0.0)));
+	vec4 rLightAtmosInt =
+		re2 * ( rTangentInt*llt + (1.0-2.0*llt) *
+				exp(rconstcoeff + lz*(rcoeffs[0] + lz*(rcoeffs[1] + lz*(rcoeffs[2] + lz*rcoeffs[3])))) / rADF);
+	vec4 mLightAtmosInt =
+		me2 * ( mTangentInt*llt + (1.0-2.0*llt) *
+				exp(mconstcoeff + lz*(mcoeffs[0] + lz*(mcoeffs[1] + lz*(mcoeffs[2] + lz*mcoeffs[3])))) / mADF);
+
+	float vy1 = dot(a,-eyedir);
+	float vz1 = 1.0 - abs(vy1)/r1;
+	float vy2 = dot(b,-eyedir);
+	float vz2 = 1.0 - abs(vy2)/r2;
+	float vlt1 = vy1<0.0 ? 1.0 : 0.0;
+	float vlt2 = vy2<0.0 ? 1.0 : 0.0;
+	float rViewAtmosInt = 
+		re2 * ( rTangentInt*vlt2 + (1.0-2.0*vlt2) *
+				exp(rconstcoeff + vz2*(rcoeffs[0] + vz2*(rcoeffs[1] + vz2*(rcoeffs[2] + vz2*rcoeffs[3])))) / rADF)
+		- re1 * ( rTangentInt*vlt1 + (1.0-2.0*vlt1) *
+				exp(rconstcoeff + vz1*(rcoeffs[0] + vz1*(rcoeffs[1] + vz1*(rcoeffs[2] + vz1*rcoeffs[3])))) / rADF);
+	float mViewAtmosInt = 
+		me2 * ( mTangentInt*vlt2 + (1.0-2.0*vlt2) *
+				exp(mconstcoeff + vz2*(mcoeffs[0] + vz2*(mcoeffs[1] + vz2*(mcoeffs[2] + vz2*mcoeffs[3])))) / mADF)
+		- me1 * ( mTangentInt*vlt1 + (1.0-2.0*vlt1) *
+				exp(mconstcoeff + vz1*(mcoeffs[0] + vz1*(mcoeffs[1] + vz1*(mcoeffs[2] + vz1*mcoeffs[3])))) / mADF);
+
+	// d[i] = dot(lightDir[i],t[i]) where t[i] is the unique point on the unit
+	// sphere whose tangent plane contains b, is in the plane of lightDir[i] and
+	// b, and is towards the light from b.
+	float lenInvSq = 1.0/dot(b,b);
+	vec4 d = ly*lenInvSq + sqrt((1.0-lenInvSq)*(1.0-(ly*ly*lenInvSq)));
+	vec4 lightIntensity = clamp(d / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0);
+
+	for (int i=0; i<NUM_LIGHTS; ++i) {
+		if (occultedLight == i) {
+			float dist = length(b - occultCentre - ly[i]*lightDir[i] );
+			lightIntensity[i] *= (1.0 - mix(0.0, maxOcclusion,
+						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
+		}
+		vec4 inAttenuation = lightIntensity[i] *
+			exp(-(rLightAtmosInt[i]*rextinction + mLightAtmosInt[i]*mextinction));
+		vec4 outAttenuation = exp(-(rViewAtmosInt*rextinction + mViewAtmosInt*mextinction));
+
+		float nDotVP = max(0.0, dot(tnorm, lightDir[i]));
+		diff += inAttenuation * gl_Color * lightDiffuse[i] * nDotVP * outAttenuation;
+
+		if (dot(outAttenuation,outAttenuation) < 0.8) {
+			// aerial perspective - we can't afford to do a numerical
+			// integration, so we make a very rough estimate:
+			vec3 ap = (a+b)/2.0;
+			float ar = length(ap);
+			float me = exp(-mADF*(ar-1.0));
+
+			float mu = dot(eyedir,lightDir[i]);
+
+			// taken from Bruneton (loc. cit.):
+			float mPhase = (3.0/(8.0*PI)) * ( (1.0-g*g)*(1.0+mu*mu) ) / ( (2.0+g*g)*pow(1.0+g*g-2.0*g*mu, 1.5));
+			const float mhackFactor = 2.0; // <--- XXX HACK XXX
+			diff += mhackFactor * inAttenuation * lightDiffuse[i] * (mc * mViewAtmosInt/2.0) * mPhase;
+
+			const float rPhase = 1.0/(4.0*PI);
+			const float rhackFactor = 5.0; // <--- XXX HACK XXX
+			diff += rhackFactor * inAttenuation * lightDiffuse[i] * (rc * rViewAtmosInt/2.0) * rPhase;
+		}
+	}
+	
+
+	/*
 	// estimate integral of scattering along the line from the eye to the
 	// vertex
 	mat4 rScatterInt = mat4(0.0);
@@ -276,6 +361,20 @@ void main(void)
 	atmosDiffuse.a = 1.0;
 	//float sun = max(0.0, dot(normalize(eyepos),normalize(vec3(gl_LightSource[0].position))));
 	gl_FragColor = atmosDiffuse;
+	*/
+
+	//vec4 atmosDiffuse = vec4(0.0,0.0,0.0,1.0);
+	//{
+		//vec3 surfaceNorm = normalize(eyepos - geosphereCenter);
+		//for (int i=0; i<NUM_LIGHTS; ++i) {
+			//atmosDiffuse += gl_LightSource[i].diffuse * max(0.0, dot(surfaceNorm, normalize(vec3(gl_LightSource[i].position))));
+		//}
+	//}
+	//atmosDiffuse.a = 1.0;
+//	float sun = dot(normalize(eyepos),normalize(vec3(gl_LightSource[0].position)));
+	gl_FragColor = diff*gl_Color + gl_LightModel.ambient*gl_Color +
+		//(1.0-fogFactor)*(atmosDiffuse*atmosColor) +
+		gl_FrontMaterial.emission;
 
 #ifdef ZHACK
 	SetFragDepth(gl_TexCoord[0].z);

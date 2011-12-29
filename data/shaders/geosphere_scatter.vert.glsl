@@ -111,13 +111,14 @@ void main(void)
 		float atmosNear;
 		float atmosFar;
 		sphereEntryExitDist(atmosNear, atmosFar, geosphereCenter, eyepos, geosphereAtmosTopRad);
-		atmosFar = min(atmosFar, length(eyepos));
 
 		vec3 eyedir = normalize(eyepos);
-		vec3 a0 = (atmosFar*eyedir - geosphereCenter) / geosphereRadius;
-		vec3 b0 = (atmosNear*eyedir - geosphereCenter) / geosphereRadius;
-		a = vec4(a0.x,a0.y,a0.z,0.0);
-		b = vec4(b0.x,b0.y,b0.z,0.0);
+		a = vec4(atmosNear*eyedir - geosphereCenter, 0.0) / geosphereRadius;
+#ifdef GROUND
+		b = vec4(eyepos - geosphereCenter, 0.0) / geosphereRadius;
+#else
+		b = vec4(atmosFar*eyedir - geosphereCenter, 0.0) / geosphereRadius;
+#endif
 	}
 
 	// N: steps in our numerical integration. Must be even, since we use
@@ -151,14 +152,14 @@ void main(void)
 		float lenInvSq = 1.0/dot(p,p);
 
 		vec4 y = p * lightDir;
-		vec4 a = vec4(1.0) - abs(y)/vec4(r);
+		vec4 z = vec4(1.0) - abs(y)/vec4(r);
 		vec4 lt = vec4(lessThan(y,vec4(0.0)));
 		vec4 rLightAtmosInt =
 			re * ( rTangentInt*lt + (1.0-2.0*lt) *
-					exp(rconstcoeff + a*(rcoeffs[0] + a*(rcoeffs[1] + a*(rcoeffs[2] + a*rcoeffs[3])))) / rADF);
+					exp(rconstcoeff + z*(rcoeffs[0] + z*(rcoeffs[1] + z*(rcoeffs[2] + z*rcoeffs[3])))) / rADF);
 		vec4 mLightAtmosInt =
 			me * ( mTangentInt*lt + (1.0-2.0*lt) *
-					exp(mconstcoeff + a*(mcoeffs[0] + a*(mcoeffs[1] + a*(mcoeffs[2] + a*mcoeffs[3])))) / mADF);
+					exp(mconstcoeff + z*(mcoeffs[0] + z*(mcoeffs[1] + z*(mcoeffs[2] + z*mcoeffs[3])))) / mADF);
 
 		if (j>0) rScatAtmosInt += re * len / 2.0;
 		if (j>0) mScatAtmosInt += me * len / 2.0;
@@ -249,6 +250,7 @@ void main(void)
 			extraIn += gl_Color * (direct[1] + secondaryLightIntensity[1] * secondaryScatter) * attenuation[1] * lightDiffuse[1];
 			extraIn += gl_Color * (direct[2] + secondaryLightIntensity[2] * secondaryScatter) * attenuation[2] * lightDiffuse[2];
 			extraIn += gl_Color * (direct[3] + secondaryLightIntensity[3] * secondaryScatter) * attenuation[3] * lightDiffuse[3];
+			extraIn = abs(extraIn);
 		}
 #endif
 	}
@@ -268,7 +270,7 @@ void main(void)
 
 		// Mie scattering, meanwhile, is highly direction-dependent, so we
 		// calculate the phase function in the fragment shader.
-		const float mhackFactor = 4.0; // <--- XXX HACK XXX
+		const float mhackFactor = 2.0; // <--- XXX HACK XXX
 		mCol[i] = mc * mhackFactor * gl_LightSource[i].diffuse * mScatterInt[i] * len/3.0;
 	}
 }
