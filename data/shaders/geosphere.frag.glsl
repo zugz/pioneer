@@ -140,6 +140,7 @@ void main(void)
 	if (useSecondary == 1)
 	{
 		vec4 secondaryScatter = vec4(0.0);
+		/*
 		float samp1 = max(0.0,r2-1.0/rADF-1.0);
 		float samp2 = r2+1.0/rADF-1.0;
 		float rse1 = exp(-(rADF*samp1));
@@ -149,6 +150,8 @@ void main(void)
 		secondaryScatter += exp(-(rse1*(r2-1)*rextinction + mse1*(r2-1)*mextinction)) * (rc * re2 + mc * me2) * (r2-1.0);
 		float outer = 1.0 + 6.0/rADF;
 		secondaryScatter += exp(-(rse1*(outer-r2)*rextinction + mse2*(r2-1.0)*mextinction)) * (rc * re2 + mc * me2) * (outer-r2);
+		*/
+		secondaryScatter = rc * re2 * (0.1/rADF) * 4*PI * (1.0 + rc * re2 * (0.1/rADF) * 4*PI * (1.0 + rc * re2 * (0.1/rADF) * 4*PI));
 	}
 
 	//for (int i=0; i<NUM_LIGHTS; ++i) {
@@ -166,34 +169,20 @@ void main(void)
 		total += inAttenuation * gl_Color * lightDiffuse[i] * (nDotVP + PI * secondaryScatter) * outAttenuation;
 
 		if (dot(outAttenuation,vec4(1.0,1.0,1.0,0.0)) < 2.9) {
-			// aerial perspective - we can't afford to do a numerical
-			// integration, so we make a very rough estimate:
-			// Problem: currenttly far too rough! If we're e.g. looking at the
-			// top of a high mountain from sea level, we have a large optical
-			// depth but the in-attenuation at our sample point half the way
-			// up is quite low; result is a ludicrously brightly blue
-			// mountain.
-			// Ideas for solution: 
-			// (i) Use flat earth hypothesis and corresponding analytic
-			// solution to the integral when we have such a situation.
-			// Issue: we don't get an analytic solution when we have two
-			// different scale heights, which we do have.
-			// But: what it gives should be quite cheap to numberically
-			// integrate.
-			//
-			// (ii) Do a numerical integration as in the sky case, but only
-			// when we have reason to think it necessary.
-			// Issue: with a sufficiently dense atmosphere, it will be common
-			// for it to be necessary.
+			// aerial perspective
+			// We use flat earth hypothesis to make the integral simple.
+			// TODO: do something else when we're in space
 			float D = distance(a,b);
 			vec4 rInScatter = vec4(0.0);
 			vec4 mInScatter = vec4(0.0);
+			vec4 sInScatter = vec4(0.0);
 			if (abs(r2-r1) < 0.05/rADF) {
 				vec4 rext = rextinction*re1;
 				float mext = mextinction*me1;
 				vec4 I = exp(-(rext*rs[i] + mext*ms[i])) * (1.0 - exp(-(rext+mext)*D)) / (rext+mext);
 				rInScatter = rc * re1 * I;
 				mInScatter = mc * me1 * I;
+				sInScatter = I * rc * re1 * rc * re1 * (0.1/rADF) * 4*PI * (1.0 + rc * re1 * (0.1/rADF) * 4*PI * (1.0 + rc * re1 * (0.1/rADF) * 4*PI));
 			} else {
 				const int N=6;
 				float Dh = (r2-r1)/float(N);
@@ -207,23 +196,27 @@ void main(void)
 							 mextinction * meh * (ms[i] - dsbydh/mADF)));
 					rInScatter += simpson * atten * rc*reh;
 					mInScatter += simpson * atten * mc*meh;
+					sInScatter += simpson * atten * rc * reh * rc * reh * (0.1/rADF) * 4*PI * (1.0 + rc * reh * (0.1/rADF) * 4*PI * (1.0 + rc * reh * (0.1/rADF) * 4*PI));
 					reh *= exp(-rADF*Dh);
 					meh *= exp(-mADF*Dh);
 				}
 				vec4 atten0 = exp(-dsbydh * (re1 * rextinction / rADF + me1 * mextinction / mADF));
 				rInScatter *= dsbydh * atten0 * Dh/3.0;
 				mInScatter *= dsbydh * atten0 * Dh/3.0;
+				sInScatter *= dsbydh * atten0 * Dh/3.0;
 			}
 
 			const float rPhase = 1.0/(4.0*PI);
 			const float rhackFactor = 1.0; // <--- XXX HACK XXX
-			total += rhackFactor * PI * lightIntensity[i] * (lightDiffuse[i] + secondaryScatter) * rInScatter * rPhase;
+			total += rhackFactor * PI * lightIntensity[i] * lightDiffuse[i] * rInScatter * rPhase;
 
 			// taken from Bruneton (loc. cit.):
 			float mu = dot(eyedir, vec3(lightDir[i]));
 			float mPhase = (3.0/(8.0*PI)) * ( (1.0-g*g)*(1.0+mu*mu) ) / ( (2.0+g*g)*pow(1.0+g*g-2.0*g*mu, 1.5));
 			const float mhackFactor = 1.0; // <--- XXX HACK XXX
-			total += mhackFactor * PI * lightIntensity[i] * (lightDiffuse[i] + secondaryScatter) * mInScatter * mPhase;
+			total += mhackFactor * PI * lightIntensity[i] * lightDiffuse[i] * mInScatter * mPhase;
+
+			total += PI * lightIntensity[i] * lightDiffuse[i] * sInScatter;
 		}
 	//}
 	

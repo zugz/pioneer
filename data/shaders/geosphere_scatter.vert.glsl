@@ -226,6 +226,8 @@ void main(void)
 		vec4 secondaryScatter = vec4(0.0);
 		if (useSecondary == 1)
 		{
+			secondaryScatter = rc * re * (0.1/rADF) * 4*PI * (1.0 + rc * re * (0.1/rADF) * 4*PI * (1.0 + rc * re * (0.1/rADF) * 4*PI));
+			/*
 			// XXX: Entirely ad hoc secondary scatter: split into two components, from below and
 			// from above, and in each case just integrate along a line, using density 1/ADF away as
 			// estimate of average... there's no good theoretical reasoning behind this, but it
@@ -241,6 +243,7 @@ void main(void)
 			float outer = 1.0 + 6.0/rADF;
 			if (r < outer)
 				secondaryScatter += exp(-(rse2*(outer-r)*rextinction + mse2*(r-1)*mextinction)) * (rc * re + mc * me) * (outer-r);
+			*/
 
 			extraIn += simpson * (len/3.0) * re * rc * PI * secondaryScatter * (matrixCompMult(attenuation, lightDiffuse) * secondaryLightIntensity);
 		}
