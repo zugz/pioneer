@@ -104,32 +104,30 @@ void main(void)
 	vec4 ly = b * lightDir;
 	vec4 lz = vec4(1.0) - abs(ly)/vec4(r2);
 	vec4 llt = vec4(lessThan(ly,vec4(0.0)));
-	vec4 rLightAtmosInt =
-		re2 * ( rTangentInt*llt + (1.0-2.0*llt) *
+	vec4 rs = ( rTangentInt*llt + (1.0-2.0*llt) *
 				exp(rconstcoeff + lz*(rcoeffs[0] + lz*(rcoeffs[1] + lz*(rcoeffs[2] + lz*rcoeffs[3])))) / rADF);
-	vec4 mLightAtmosInt =
-		me2 * ( mTangentInt*llt + (1.0-2.0*llt) *
+	vec4 ms = ( mTangentInt*llt + (1.0-2.0*llt) *
 				exp(mconstcoeff + lz*(mcoeffs[0] + lz*(mcoeffs[1] + lz*(mcoeffs[2] + lz*mcoeffs[3])))) / mADF);
+	vec4 rLightAtmosInt = re2 * rs;
+	vec4 mLightAtmosInt = me2 * ms;
 
-	float vy1 = dot(a,-eyedir);
-	float vz1 = 1.0 - abs(vy1)/r1;
-	float vy2 = dot(b,-eyedir);
-	float vz2 = 1.0 - abs(vy2)/r2;
-	float vlt1 = vy1<0.0 ? 1.0 : 0.0;
-	float vlt2 = vy2<0.0 ? 1.0 : 0.0;
-	// TODO: could probably optimise this by using flat earth hypothesis, and
-	// corresponding analytic solution to the integral, when the view point is
-	// low enough, and when we're in space noting that the negative term is 0.
-	float rViewAtmosInt = 
-		re2 * ( rTangentInt*vlt2 + (1.0-2.0*vlt2) *
-				exp(rconstcoeff + vz2*(rcoeffs[0] + vz2*(rcoeffs[1] + vz2*(rcoeffs[2] + vz2*rcoeffs[3])))) / rADF)
-		- re1 * ( rTangentInt*vlt1 + (1.0-2.0*vlt1) *
-				exp(rconstcoeff + vz1*(rcoeffs[0] + vz1*(rcoeffs[1] + vz1*(rcoeffs[2] + vz1*rcoeffs[3])))) / rADF);
-	float mViewAtmosInt = 
-		me2 * ( mTangentInt*vlt2 + (1.0-2.0*vlt2) *
-				exp(mconstcoeff + vz2*(mcoeffs[0] + vz2*(mcoeffs[1] + vz2*(mcoeffs[2] + vz2*mcoeffs[3])))) / mADF)
-		- me1 * ( mTangentInt*vlt1 + (1.0-2.0*vlt1) *
-				exp(mconstcoeff + vz1*(mcoeffs[0] + vz1*(mcoeffs[1] + vz1*(mcoeffs[2] + vz1*mcoeffs[3])))) / mADF);
+	float rViewAtmosInt, mViewAtmosInt;
+	{
+		float vy1 = dot(vec3(a),eyedir);
+		float vz1 = 1.0 - abs(vy1)/r1;
+		float vy2 = dot(vec3(b),eyedir);
+		float vz2 = 1.0 - abs(vy2)/r2;
+		// TODO: could probably optimise this when the view point is low
+		// enough by using flat earth hypothesis, and corresponding analytic
+		// solution to the integral, and when we're in space by noting that
+		// one term is 0.
+		float vrs1 = exp(rconstcoeff + vz1*(rcoeffs[0] + vz1*(rcoeffs[1] + vz1*(rcoeffs[2] + vz1*rcoeffs[3])))) / rADF;
+		float vrs2 = exp(rconstcoeff + vz2*(rcoeffs[0] + vz2*(rcoeffs[1] + vz2*(rcoeffs[2] + vz2*rcoeffs[3])))) / rADF;
+		float vms1 = exp(mconstcoeff + vz1*(mcoeffs[0] + vz1*(mcoeffs[1] + vz1*(mcoeffs[2] + vz1*mcoeffs[3])))) / mADF;
+		float vms2 = exp(mconstcoeff + vz2*(mcoeffs[0] + vz2*(mcoeffs[1] + vz2*(mcoeffs[2] + vz2*mcoeffs[3])))) / mADF;
+		rViewAtmosInt = ((vy1>0.0) == (vy2>0.0)) ? abs(re1*vrs1-re2*vrs2) : (re1+re2)/2.0 * (rTangentInt - (vrs1+vrs2));
+		mViewAtmosInt = ((vy1>0.0) == (vy2>0.0)) ? abs(me1*vms1-me2*vms2) : (me1+me2)/2.0 * (mTangentInt - (vms1+vms2));
+	}
 
 	// d[i] = dot(lightDir[i],t[i]) where t[i] is the unique point on the unit
 	// sphere whose tangent plane contains b, is in the plane of lightDir[i] and
@@ -142,14 +140,19 @@ void main(void)
 	if (useSecondary == 1)
 	{
 		vec4 secondaryScatter = vec4(0.0);
-		float samp2 = r2+1.0/rADF;
-		float rse = exp(-(rADF*samp2));
-		float mse = exp(-(mADF*samp2));
+		float samp1 = max(0.0,r2-1.0/rADF-1.0);
+		float samp2 = r2+1.0/rADF-1.0;
+		float rse1 = exp(-(rADF*samp1));
+		float rse2 = exp(-(rADF*samp2));
+		float mse1 = exp(-(mADF*samp1));
+		float mse2 = exp(-(mADF*samp2));
+		secondaryScatter += exp(-(rse1*(r2-1)*rextinction + mse1*(r2-1)*mextinction)) * (rc * re2 + mc * me2) * (r2-1.0);
 		float outer = 1.0 + 6.0/rADF;
-		secondaryScatter += exp(-(rse*(outer-r2)*rextinction + mse*(r2-1)*mextinction)) * (rc * re2 + mc * me2) * (outer-r2);
+		secondaryScatter += exp(-(rse1*(outer-r2)*rextinction + mse2*(r2-1.0)*mextinction)) * (rc * re2 + mc * me2) * (outer-r2);
 	}
 
-	for (int i=0; i<NUM_LIGHTS; ++i) {
+	//for (int i=0; i<NUM_LIGHTS; ++i) {
+	int i=0;
 		if (occultedLight == i) {
 			float dist = length(b - occultCentre - ly[i]*lightDir[i] );
 			lightIntensity[i] *= (1.0 - mix(0.0, maxOcclusion,
@@ -159,7 +162,7 @@ void main(void)
 			exp(-(rLightAtmosInt[i]*rextinction + mLightAtmosInt[i]*mextinction));
 		vec4 outAttenuation = exp(-(rViewAtmosInt*rextinction + mViewAtmosInt*mextinction));
 
-		float nDotVP = max(0.0, dot(tnorm, lightDir[i]));
+		float nDotVP = max(0.0, dot(vec4(tnorm,0.0), lightDir[i]));
 		total += inAttenuation * gl_Color * lightDiffuse[i] * (nDotVP + PI * secondaryScatter) * outAttenuation;
 
 		if (dot(outAttenuation,vec4(1.0,1.0,1.0,0.0)) < 2.9) {
@@ -182,36 +185,47 @@ void main(void)
 			// when we have reason to think it necessary.
 			// Issue: with a sufficiently dense atmosphere, it will be common
 			// for it to be necessary.
-			vec3 ap = (a+b)/2.0;
-			float ar = length(ap);
-			float are = exp(-rADF*(ar-1.0));
-			float ame = exp(-mADF*(ar-1.0));
-
-			float ay = dot(ap, lightDir[i]);
-			float az = 1.0 - abs(ay)/ar;
-			float alt = ay<0.0 ? 1.0 : 0.0;
-			float raint = are * ( rTangentInt*alt + (1.0-2.0*alt) *
-						exp(rconstcoeff + az*(rcoeffs[0] + az*(rcoeffs[1] + az*(rcoeffs[2] + az*rcoeffs[3])))) / rADF);
-			float maint = ame * ( mTangentInt*alt + (1.0-2.0*alt) *
-						exp(mconstcoeff + az*(mcoeffs[0] + az*(mcoeffs[1] + az*(mcoeffs[2] + az*mcoeffs[3])))) / mADF);
-
-			vec4 ainAttenuation = lightIntensity[i] *
-				exp(-(raint*rextinction + maint*mextinction));
-
-			float mu = dot(eyedir,lightDir[i]);
+			float D = distance(a,b);
+			vec4 rInScatter = vec4(0.0);
+			vec4 mInScatter = vec4(0.0);
+			if (abs(r2-r1) < 0.05/rADF) {
+				vec4 rext = rextinction*re1;
+				float mext = mextinction*me1;
+				vec4 I = exp(-(rext*rs[i] + mext*ms[i])) * (1.0 - exp(-(rext+mext)*D)) / (rext+mext);
+				rInScatter = rc * re1 * I;
+				mInScatter = mc * me1 * I;
+			} else {
+				const int N=6;
+				float Dh = (r2-r1)/float(N);
+				float dsbydh = D/(r2-r1);
+				float reh = re1;
+				float meh = me1;
+				for (int j=0; j<N+1; j++) {
+					float simpson = (j==0||j==N) ? 1.0 : (j == j/2*2) ? 2.0 : 4.0;
+					vec4 atten = exp(-
+							(rextinction * reh * (rs[i] - dsbydh/rADF) +
+							 mextinction * meh * (ms[i] - dsbydh/mADF)));
+					rInScatter += simpson * atten * rc*reh;
+					mInScatter += simpson * atten * mc*meh;
+					reh *= exp(-rADF*Dh);
+					meh *= exp(-mADF*Dh);
+				}
+				vec4 atten0 = exp(-dsbydh * (re1 * rextinction / rADF + me1 * mextinction / mADF));
+				rInScatter *= dsbydh * atten0 * Dh/3.0;
+				mInScatter *= dsbydh * atten0 * Dh/3.0;
+			}
 
 			const float rPhase = 1.0/(4.0*PI);
 			const float rhackFactor = 1.0; // <--- XXX HACK XXX
-			total += rhackFactor * ainAttenuation * PI * (lightDiffuse[i] + secondaryScatter) * (rc * rViewAtmosInt) * rPhase
-				* outAttenuation;
+			total += rhackFactor * PI * lightIntensity[i] * (lightDiffuse[i] + secondaryScatter) * rInScatter * rPhase;
 
 			// taken from Bruneton (loc. cit.):
+			float mu = dot(eyedir, vec3(lightDir[i]));
 			float mPhase = (3.0/(8.0*PI)) * ( (1.0-g*g)*(1.0+mu*mu) ) / ( (2.0+g*g)*pow(1.0+g*g-2.0*g*mu, 1.5));
 			const float mhackFactor = 1.0; // <--- XXX HACK XXX
-			total += mhackFactor * ainAttenuation * PI * (lightDiffuse[i] + secondaryScatter) * (mc * mViewAtmosInt) * mPhase
-				* outAttenuation;
+			total += mhackFactor * PI * lightIntensity[i] * (lightDiffuse[i] + secondaryScatter) * mInScatter * mPhase;
 		}
-	}
+	//}
 	
 
 	/*
