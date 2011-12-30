@@ -161,49 +161,55 @@ void main(void)
 			lightIntensity[i] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
 		}
-		vec4 inAttenuation = lightIntensity[i] *
-			exp(-(rLightAtmosInt[i]*rextinction + mLightAtmosInt[i]*mextinction));
+		vec4 inAttenuation = exp(-(rLightAtmosInt[i]*rextinction + mLightAtmosInt[i]*mextinction));
 		vec4 outAttenuation = exp(-(rViewAtmosInt*rextinction + mViewAtmosInt*mextinction));
 
 		float nDotVP = max(0.0, dot(vec4(tnorm,0.0), lightDir[i]));
-		total += inAttenuation * gl_Color * lightDiffuse[i] * (nDotVP + PI * secondaryScatter) * outAttenuation;
+		total += lightIntensity[i] * inAttenuation * gl_Color * lightDiffuse[i] * (nDotVP + PI * secondaryScatter) * outAttenuation;
 
-		if (dot(outAttenuation,vec4(1.0,1.0,1.0,0.0)) < 2.9) {
+		if (dot(outAttenuation,vec4(1.0,1.0,1.0,0.0)) < 2.8) {
 			// aerial perspective
 			// We use flat earth hypothesis to make the integral simple.
-			// TODO: do something else when we're in space
+			// TODO: do something else when we're in space (because planets
+			// aren't actually flat, and because we can probably do something
+			// cheaper than this numerical integration)
 			float D = distance(a,b);
 			vec4 rInScatter = vec4(0.0);
 			vec4 mInScatter = vec4(0.0);
 			vec4 sInScatter = vec4(0.0);
 			if (abs(r2-r1) < 0.05/rADF) {
-				vec4 rext = rextinction*re1;
-				float mext = mextinction*me1;
-				vec4 I = exp(-(rext*rs[i] + mext*ms[i])) * (1.0 - exp(-(rext+mext)*D)) / (rext+mext);
+				vec4 sumext = rextinction*re1 + mextinction*me1;
+				//vec4 I = exp(-(rext*rs[i] + mext*ms[i])) * (1.0 - exp(-(rext+mext)*D)) / (rext+mext);
+				vec4 I = inAttenuation * (1.0 - exp(-sumext*D)) / sumext;
 				rInScatter = rc * re1 * I;
 				mInScatter = mc * me1 * I;
-				sInScatter = I * rc * re1 * rc * re1 * (0.1/rADF) * 4*PI * (1.0 + rc * re1 * (0.1/rADF) * 4*PI * (1.0 + rc * re1 * (0.1/rADF) * 4*PI));
+				if (useSecondary)
+					sInScatter = I * rc * re1 * rc * re1 * (0.1/rADF) * 4*PI * (1.0 + rc * re1 * (0.1/rADF) * 4*PI * (1.0 + rc * re1 * (0.1/rADF) * 4*PI));
 			} else {
 				const int N=6;
-				float Dh = (r2-r1)/float(N);
 				float dsbydh = D/(r2-r1);
+				float Dh = (r2-r1)/float(N);
+				float rstep = exp(-rADF*Dh);
+				float mstep = exp(-mADF*Dh);
 				float reh = re1;
 				float meh = me1;
+				float rfac = rextinction * (rs[i] - dsbydh/rADF);
+				float mfac = mextinction * (ms[i] - dsbydh/mADF);
 				for (int j=0; j<N+1; j++) {
 					float simpson = (j==0||j==N) ? 1.0 : (j == j/2*2) ? 2.0 : 4.0;
-					vec4 atten = exp(-
-							(rextinction * reh * (rs[i] - dsbydh/rADF) +
-							 mextinction * meh * (ms[i] - dsbydh/mADF)));
+					vec4 atten = exp(-(reh * rfac + meh * mfac));
 					rInScatter += simpson * atten * rc*reh;
 					mInScatter += simpson * atten * mc*meh;
-					sInScatter += simpson * atten * rc * reh * rc * reh * (0.1/rADF) * 4*PI * (1.0 + rc * reh * (0.1/rADF) * 4*PI * (1.0 + rc * reh * (0.1/rADF) * 4*PI));
-					reh *= exp(-rADF*Dh);
-					meh *= exp(-mADF*Dh);
+					if (useSecondary)
+						sInScatter += simpson * atten * rc * reh * rc * reh * (0.1/rADF) * 4*PI * (1.0 + rc * reh * (0.1/rADF) * 4*PI * (1.0 + rc * reh * (0.1/rADF) * 4*PI));
+					reh *= rstep;
+					meh *= mstep;
 				}
 				vec4 atten0 = exp(-dsbydh * (re1 * rextinction / rADF + me1 * mextinction / mADF));
 				rInScatter *= dsbydh * atten0 * Dh/3.0;
 				mInScatter *= dsbydh * atten0 * Dh/3.0;
-				sInScatter *= dsbydh * atten0 * Dh/3.0;
+				if (useSecondary)
+					sInScatter *= dsbydh * atten0 * Dh/3.0;
 			}
 
 			const float rPhase = 1.0/(4.0*PI);
@@ -217,6 +223,7 @@ void main(void)
 			total += mhackFactor * PI * lightIntensity[i] * lightDiffuse[i] * mInScatter * mPhase;
 
 			total += PI * lightIntensity[i] * lightDiffuse[i] * sInScatter;
+			total += vec4(0.0,1.0,1.0,0.0);
 		}
 	//}
 	
