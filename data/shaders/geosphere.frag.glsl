@@ -165,7 +165,6 @@ void main(void)
 		float nDotVP = max(0.0, dot(vec4(tnorm,0.0), lightDir[i]));
 		total += lightIntensity[i] * inAttenuation * gl_Color * lightDiffuse[i] * (nDotVP + PI * secondaryScatter) * outAttenuation;
 
-		if (dot(outAttenuation,vec4(1.0,1.0,1.0,0.0)) < 2.8) {
 			// aerial perspective
 			// We use flat earth hypothesis to make the integral simple.
 			// Problem: the numerical integration is *still* too expensive.
@@ -203,7 +202,7 @@ void main(void)
 				float mstep = exp(-mADF*Dh);
 				float reh = re1;
 				float meh = me1;
-				float rfac = rextinction * (rs[i] - dsbydh/rADF);
+				vec4 rfac = rextinction * (rs[i] - dsbydh/rADF);
 				float mfac = mextinction * (ms[i] - dsbydh/mADF);
 				for (int j=0; j<N+1; j++) {
 					float simpson = (j==0||j==N) ? 1.0 : (j == j/2*2) ? 2.0 : 4.0;
@@ -227,7 +226,6 @@ void main(void)
 			float mPhase = (3.0/(8.0*PI)) * ( (1.0-g*g)*(1.0+mu*mu) ) / ( (2.0+g*g)*pow(1.0+g*g-2.0*g*mu, 1.5));
 			const float mhackFactor = 1.0; // <--- XXX HACK XXX
 			total += mhackFactor * PI * lightIntensity[i] * lightDiffuse[i] * mInScatter * mPhase;
-		}
 	//}
 	
 
