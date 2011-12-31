@@ -178,44 +178,45 @@ void main(void)
 		vec4 lightIntensity = clamp(d / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0);
 
 		vec4 secondaryLightIntensity = 0.0;
-		if (useSecondary == 1)
-			secondaryLightIntensity = clamp(d / (2.0*(lightDiscRadii+2.0/rADF)) + 0.5, 0.0, 1.0);
+		// secondaryLightIntensity = clamp(d / (2.0*(lightDiscRadii+2.0/rADF)) + 0.5, 0.0, 1.0);
+		const float secMaxDist = 5.0/rADF;
+		secondaryLightIntensity = clamp(d / (2.0*(lightDiscRadii+secMaxDist)) + 0.5, 0.0, 1.0);
 
 		if (occultedLight == 0) {
 			float dist = length(p - occultCentre - y[0]*lightDir[0] );
 			lightIntensity[0] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
 				secondaryLightIntensity[0] *= (1.0 - mix(0.0, maxOcclusion,
-							clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
+							clamp( ( trad-dist + secMaxDist ) / ( trad-absdiff + 2.0*secMaxDist ), 0.0, 1.0)));
 		}
 		else if (occultedLight == 1) {
 			float dist = length(p - occultCentre - y[1]*lightDir[1] );
 			lightIntensity[1] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
 				secondaryLightIntensity[1] *= (1.0 - mix(0.0, maxOcclusion,
-							clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
+							clamp( ( trad-dist + secMaxDist ) / ( trad-absdiff + 2.0*secMaxDist ), 0.0, 1.0)));
 		}
 		else if (occultedLight == 2) {
 			float dist = length(p - occultCentre - y[2]*lightDir[2] );
 			lightIntensity[2] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
 				secondaryLightIntensity[2] *= (1.0 - mix(0.0, maxOcclusion,
-							clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
+							clamp( ( trad-dist + secMaxDist ) / ( trad-absdiff + 2.0*secMaxDist ), 0.0, 1.0)));
 		}
 		else if (occultedLight == 3) {
 			float dist = length(p - occultCentre - y[3]*lightDir[3] );
 			lightIntensity[3] *= (1.0 - mix(0.0, maxOcclusion,
 						clamp( ( trad-dist ) / ( trad-absdiff ), 0.0, 1.0)));
 				secondaryLightIntensity[3] *= (1.0 - mix(0.0, maxOcclusion,
-							clamp( ( trad-dist + 2.0/rADF ) / ( trad-absdiff + 4.0/rADF ), 0.0, 1.0)));
+							clamp( ( trad-dist + secMaxDist ) / ( trad-absdiff + 2.0*secMaxDist ), 0.0, 1.0)));
 		}
 
 		mat4 rScatter;
 		mat4 mScatter;
-		rScatter[0] = attenuation[0] * lightIntensity[0] * re;
-		rScatter[1] = attenuation[1] * lightIntensity[1] * re;
-		rScatter[2] = attenuation[2] * lightIntensity[2] * re;
-		rScatter[3] = attenuation[3] * lightIntensity[3] * re;
+		rScatter[0] = attenuation[0] * (2.0*lightIntensity[0] + 3.0*secondaryLightIntensity[0]) * re;
+		rScatter[1] = attenuation[1] * (2.0*lightIntensity[1] + 3.0*secondaryLightIntensity[1]) * re;
+		rScatter[2] = attenuation[2] * (2.0*lightIntensity[2] + 3.0*secondaryLightIntensity[2]) * re;
+		rScatter[3] = attenuation[3] * (2.0*lightIntensity[3] + 3.0*secondaryLightIntensity[3]) * re;
 		mScatter[0] = attenuation[0] * lightIntensity[0] * me;
 		mScatter[1] = attenuation[1] * lightIntensity[1] * me;
 		mScatter[2] = attenuation[2] * lightIntensity[2] * me;
@@ -226,7 +227,16 @@ void main(void)
 		vec4 secondaryScatter = vec4(0.0);
 		if (useSecondary == 1)
 		{
-			secondaryScatter = rc * re * (0.1/rADF) * 4*PI * (1.0 + rc * re * (0.1/rADF) * 4*PI * (1.0 + rc * re * (0.1/rADF) * 4*PI));
+			//secondaryScatter = rc * re * (0.1/rADF) * 4*PI * (1.0 + rc * re * (0.1/rADF) * 4*PI * (1.0 + rc * re * (0.1/rADF) * 4*PI));
+
+			// Idea: 1.0/rADF is gaseous optical depth for a radial line from
+			// the surface to infinity. Our fairly arbitrary estimate is that
+			// through every point passes multiply scattered light
+			// corresponding to twice the amount scattered along this optical
+			// depth, with scattering path being of optical depth that of
+			// direct light to the point.
+			//secondaryScatter = rc * 1.0/rADF * exp(-rextinction*1.0/rADF);
+
 			/*
 			// XXX: Entirely ad hoc secondary scatter: split into two components, from below and
 			// from above, and in each case just integrate along a line, using density 1/ADF away as
@@ -245,7 +255,7 @@ void main(void)
 				secondaryScatter += exp(-(rse2*(outer-r)*rextinction + mse2*(r-1)*mextinction)) * (rc * re + mc * me) * (outer-r);
 			*/
 
-			extraIn += simpson * (len/3.0) * re * rc * PI * secondaryScatter * (matrixCompMult(attenuation, lightDiffuse) * secondaryLightIntensity);
+			//extraIn += simpson * (len/3.0) * re * rc * PI * secondaryScatter * (matrixCompMult(attenuation, lightDiffuse) * secondaryLightIntensity);
 		}
 
 #ifdef GROUND

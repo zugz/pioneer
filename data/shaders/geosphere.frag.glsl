@@ -139,8 +139,6 @@ void main(void)
 	vec4 secondaryScatter = vec4(0.0);
 	if (useSecondary == 1)
 	{
-		vec4 secondaryScatter = vec4(0.0);
-		/*
 		float samp1 = max(0.0,r2-1.0/rADF-1.0);
 		float samp2 = r2+1.0/rADF-1.0;
 		float rse1 = exp(-(rADF*samp1));
@@ -150,8 +148,8 @@ void main(void)
 		secondaryScatter += exp(-(rse1*(r2-1)*rextinction + mse1*(r2-1)*mextinction)) * (rc * re2 + mc * me2) * (r2-1.0);
 		float outer = 1.0 + 6.0/rADF;
 		secondaryScatter += exp(-(rse1*(outer-r2)*rextinction + mse2*(r2-1.0)*mextinction)) * (rc * re2 + mc * me2) * (outer-r2);
-		*/
-		secondaryScatter = rc * re2 * (0.1/rADF) * 4*PI * (1.0 + rc * re2 * (0.1/rADF) * 4*PI * (1.0 + rc * re2 * (0.1/rADF) * 4*PI));
+
+		//secondaryScatter = rc * re2 * (0.1/rADF) * 4*PI * (1.0 + rc * re2 * (0.1/rADF) * 4*PI * (1.0 + rc * re2 * (0.1/rADF) * 4*PI));
 	}
 
 	//for (int i=0; i<NUM_LIGHTS; ++i) {
@@ -170,21 +168,33 @@ void main(void)
 		if (dot(outAttenuation,vec4(1.0,1.0,1.0,0.0)) < 2.8) {
 			// aerial perspective
 			// We use flat earth hypothesis to make the integral simple.
-			// TODO: do something else when we're in space (because planets
-			// aren't actually flat, and because we can probably do something
-			// cheaper than this numerical integration)
+			// Problem: the numerical integration is *still* too expensive.
+			// We could separate the Mie from the Rayleigh, and separately do
+			// each integral analytically. This would be quite wrong, but
+			// would at least be fairly cheap. Could we can hack in some
+			// factor to one to account for the other?
+			// Problem even with that: we need secondary scatter to be
+			// (affine) linear in exp(-rADF*h) to be able to do the integral.
+			// Really need to find a decent such hack for skylight!
+			//
+			// Alternative to separating out the two particles: see
+			// Preetham-Shirley-Smits, where they use a cubic approximation to
+			// one of the exponentials hence allowing a by-parts analytic
+			// integral. They use a precomputed texture for skylight, though,
+			// which won't play nicely with eclipses. But then we're anyway
+			// going to need at some point a way to calculate the effect of
+			// eclipses on skylight. So maybe this precomputation (a kind of
+			// half-Bruneton) is very sensible. Hmm. But maybe we don't need
+			// to do it, actually.
 			float D = distance(a,b);
 			vec4 rInScatter = vec4(0.0);
 			vec4 mInScatter = vec4(0.0);
-			vec4 sInScatter = vec4(0.0);
 			if (abs(r2-r1) < 0.05/rADF) {
 				vec4 sumext = rextinction*re1 + mextinction*me1;
 				//vec4 I = exp(-(rext*rs[i] + mext*ms[i])) * (1.0 - exp(-(rext+mext)*D)) / (rext+mext);
 				vec4 I = inAttenuation * (1.0 - exp(-sumext*D)) / sumext;
-				rInScatter = rc * re1 * I;
+				rInScatter = rc * re1 * I * 5.0;
 				mInScatter = mc * me1 * I;
-				if (useSecondary)
-					sInScatter = I * rc * re1 * rc * re1 * (0.1/rADF) * 4*PI * (1.0 + rc * re1 * (0.1/rADF) * 4*PI * (1.0 + rc * re1 * (0.1/rADF) * 4*PI));
 			} else {
 				const int N=6;
 				float dsbydh = D/(r2-r1);
@@ -198,18 +208,14 @@ void main(void)
 				for (int j=0; j<N+1; j++) {
 					float simpson = (j==0||j==N) ? 1.0 : (j == j/2*2) ? 2.0 : 4.0;
 					vec4 atten = exp(-(reh * rfac + meh * mfac));
-					rInScatter += simpson * atten * rc*reh;
+					rInScatter += simpson * atten * rc*reh * 5.0;
 					mInScatter += simpson * atten * mc*meh;
-					if (useSecondary)
-						sInScatter += simpson * atten * rc * reh * rc * reh * (0.1/rADF) * 4*PI * (1.0 + rc * reh * (0.1/rADF) * 4*PI * (1.0 + rc * reh * (0.1/rADF) * 4*PI));
 					reh *= rstep;
 					meh *= mstep;
 				}
 				vec4 atten0 = exp(-dsbydh * (re1 * rextinction / rADF + me1 * mextinction / mADF));
 				rInScatter *= dsbydh * atten0 * Dh/3.0;
 				mInScatter *= dsbydh * atten0 * Dh/3.0;
-				if (useSecondary)
-					sInScatter *= dsbydh * atten0 * Dh/3.0;
 			}
 
 			const float rPhase = 1.0/(4.0*PI);
@@ -221,9 +227,6 @@ void main(void)
 			float mPhase = (3.0/(8.0*PI)) * ( (1.0-g*g)*(1.0+mu*mu) ) / ( (2.0+g*g)*pow(1.0+g*g-2.0*g*mu, 1.5));
 			const float mhackFactor = 1.0; // <--- XXX HACK XXX
 			total += mhackFactor * PI * lightIntensity[i] * lightDiffuse[i] * mInScatter * mPhase;
-
-			total += PI * lightIntensity[i] * lightDiffuse[i] * sInScatter;
-			total += vec4(0.0,1.0,1.0,0.0);
 		}
 	//}
 	
