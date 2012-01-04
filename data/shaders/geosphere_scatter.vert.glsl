@@ -88,6 +88,8 @@ void main(void)
 	const float rTangentInt = 2.0*exp(rconstcoeff+rcoeffs[0]+rcoeffs[1]+rcoeffs[2]+rcoeffs[3])/rADF;
 	const float mTangentInt = 2.0*exp(mconstcoeff+mcoeffs[0]+mcoeffs[1]+mcoeffs[2]+mcoeffs[3])/mADF;
 
+	const float constantPhase = 1.0/(4.0*PI);
+
 	mat4 lightDir = mat4(0.0);
 	mat4 lightDiffuse = mat4(0.0);
 	for (int i=0; i<NUM_LIGHTS; ++i) {
@@ -132,7 +134,7 @@ void main(void)
 	// having approximately correct continuation of atmospheric effects. Then
 	// we can use the same tricks for models.
 #ifdef GROUND
-	const int N = 10;
+	const int N = 6;
 #else
 	const int N = 10;
 #endif
@@ -178,7 +180,6 @@ void main(void)
 		vec4 lightIntensity = clamp(d / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0);
 
 		vec4 secondaryLightIntensity = 0.0;
-		// secondaryLightIntensity = clamp(d / (2.0*(lightDiscRadii+2.0/rADF)) + 0.5, 0.0, 1.0);
 		const float secMaxDist = 5.0/rADF;
 		secondaryLightIntensity = clamp(d / (2.0*(lightDiscRadii+secMaxDist)) + 0.5, 0.0, 1.0);
 
@@ -213,10 +214,10 @@ void main(void)
 
 		mat4 rScatter;
 		mat4 mScatter;
-		rScatter[0] = attenuation[0] * (2.0*lightIntensity[0] + 3.0*secondaryLightIntensity[0]) * re;
-		rScatter[1] = attenuation[1] * (2.0*lightIntensity[1] + 3.0*secondaryLightIntensity[1]) * re;
-		rScatter[2] = attenuation[2] * (2.0*lightIntensity[2] + 3.0*secondaryLightIntensity[2]) * re;
-		rScatter[3] = attenuation[3] * (2.0*lightIntensity[3] + 3.0*secondaryLightIntensity[3]) * re;
+		rScatter[0] = attenuation[0] * lightIntensity[0] * re;
+		rScatter[1] = attenuation[1] * lightIntensity[1] * re;
+		rScatter[2] = attenuation[2] * lightIntensity[2] * re;
+		rScatter[3] = attenuation[3] * lightIntensity[3] * re;
 		mScatter[0] = attenuation[0] * lightIntensity[0] * me;
 		mScatter[1] = attenuation[1] * lightIntensity[1] * me;
 		mScatter[2] = attenuation[2] * lightIntensity[2] * me;
@@ -227,6 +228,7 @@ void main(void)
 		vec4 secondaryScatter = vec4(0.0);
 		if (useSecondary == 1)
 		{
+		//	extraIn += simpson * (len/3.0) * re * rc * PI * (1.0/(4.0*PI)) * exp(-(rScatAtmosInt*rextinction + mScatAtmosInt*mextinction)) * (lightDiffuse * secondaryLightIntensity);
 			//secondaryScatter = rc * re * (0.1/rADF) * 4*PI * (1.0 + rc * re * (0.1/rADF) * 4*PI * (1.0 + rc * re * (0.1/rADF) * 4*PI));
 
 			// Idea: 1.0/rADF is gaseous optical depth for a radial line from
@@ -235,46 +237,50 @@ void main(void)
 			// corresponding to twice the amount scattered along this optical
 			// depth, with scattering path being of optical depth that of
 			// direct light to the point.
-			//secondaryScatter = rc * 1.0/rADF * exp(-rextinction*1.0/rADF);
-
+			secondaryScatter = 4.0*PI*rc * 2.0/rADF * exp(-rextinction*1.0/rADF);
+			
 			/*
 			// XXX: Entirely ad hoc secondary scatter: split into two components, from below and
 			// from above, and in each case just integrate along a line, using density 1/ADF away as
 			// estimate of average... there's no good theoretical reasoning behind this, but it
 			// seems to work!
 			vec4 secondaryScatter = vec4(0.0);
+#ifndef GROUND
 			float samp1 = max(0.0,r-1.0/rADF-1.0);
-			float samp2 = r+1.0/rADF-1.0;
 			float rse1 = exp(-(rADF*samp1));
-			float rse2 = exp(-(rADF*samp2));
 			float mse1 = exp(-(mADF*samp1));
-			float mse2 = exp(-(mADF*samp2));
 			secondaryScatter += exp(-(rse1*(r-1)*rextinction + mse1*(r-1)*mextinction)) * (rc * re + mc * me) * (r-1.0);
+#endif
+			float samp2 = r+1.0/rADF-1.0;
+			float rse2 = exp(-(rADF*samp2));
+			float mse2 = exp(-(mADF*samp2));
 			float outer = 1.0 + 6.0/rADF;
 			if (r < outer)
 				secondaryScatter += exp(-(rse2*(outer-r)*rextinction + mse2*(r-1)*mextinction)) * (rc * re + mc * me) * (outer-r);
 			*/
 
-			//extraIn += simpson * (len/3.0) * re * rc * PI * secondaryScatter * (matrixCompMult(attenuation, lightDiffuse) * secondaryLightIntensity);
+			extraIn += simpson * (len/3.0) * (re * rc + me * mc) * PI * constantPhase * secondaryScatter * (matrixCompMult(attenuation, lightDiffuse) * secondaryLightIntensity);
 		}
 
 #ifdef GROUND
 		if (j==N) {
 			vec4 direct = lightIntensity * max(0.0, vec4(normalize(gl_NormalMatrix * gl_Normal),0.0) * lightDir);
-			extraIn += gl_Color * (direct[0] + secondaryLightIntensity[0] * PI * secondaryScatter) * attenuation[0] * lightDiffuse[0];
-			extraIn += gl_Color * (direct[1] + secondaryLightIntensity[1] * PI * secondaryScatter) * attenuation[1] * lightDiffuse[1];
-			extraIn += gl_Color * (direct[2] + secondaryLightIntensity[2] * PI * secondaryScatter) * attenuation[2] * lightDiffuse[2];
-			extraIn += gl_Color * (direct[3] + secondaryLightIntensity[3] * PI * secondaryScatter) * attenuation[3] * lightDiffuse[3];
+			extraIn += gl_Color * (direct[0] + secondaryLightIntensity[0] * PI * (1.0/(2*PI)) * secondaryScatter) * attenuation[0] * lightDiffuse[0];
+			extraIn += gl_Color * (direct[1] + secondaryLightIntensity[1] * PI * (1.0/(2*PI)) * secondaryScatter) * attenuation[1] * lightDiffuse[1];
+			extraIn += gl_Color * (direct[2] + secondaryLightIntensity[2] * PI * (1.0/(2*PI)) * secondaryScatter) * attenuation[2] * lightDiffuse[2];
+			extraIn += gl_Color * (direct[3] + secondaryLightIntensity[3] * PI * (1.0/(2*PI)) * secondaryScatter) * attenuation[3] * lightDiffuse[3];
 		}
 #endif
 	}
 
 	rCol = 0.0;
 	for (int i=0; i<NUM_LIGHTS; ++i) {
-		// Actual phase function for Rayleigh scattering is (1 + cos(viewAngle) * (3/(16\pi)), but
+		// Actual phase function for Rayleigh scattering is (1 + cos^2(viewAngle)) * (3/(16\pi), but
 		// due to multiple scattering, the dependence on angle is barely present in real skies. As
 		// part of our implementation of multiple scattering, therefore, we use the constant phase
 		// factor:
+		// float mu = dot(varyingEyepos, lightDir[i]);
+		// float rPhase = (1.0+mu*mu) * (3.0/(16.0*PI));
 		const float rPhase = 1.0/(4.0*PI);
 		// We also just multiply up the value by an ad hoc factor. We could try to excuse this by
 		// saying it accounts for multiple scatter, but I've no reason other than subjective

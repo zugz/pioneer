@@ -72,6 +72,8 @@ void main(void)
 
 	const float g = 0.76;
 
+	const float constantPhase = 1.0/(4.0*PI);
+
 	// estimated atmosphere density integrals for whole line tangent to
 	// sphere:
 	const float rTangentInt = 2.0*exp(rconstcoeff+rcoeffs[0]+rcoeffs[1]+rcoeffs[2]+rcoeffs[3])/rADF;
@@ -139,6 +141,8 @@ void main(void)
 	vec4 secondaryScatter = vec4(0.0);
 	if (useSecondary == 1)
 	{
+		secondaryScatter = 4.0*PI * rc * 2.0/rADF * exp(-rextinction*1.0/rADF);
+		/*
 		float samp1 = max(0.0,r2-1.0/rADF-1.0);
 		float samp2 = r2+1.0/rADF-1.0;
 		float rse1 = exp(-(rADF*samp1));
@@ -148,6 +152,7 @@ void main(void)
 		secondaryScatter += exp(-(rse1*(r2-1)*rextinction + mse1*(r2-1)*mextinction)) * (rc * re2 + mc * me2) * (r2-1.0);
 		float outer = 1.0 + 6.0/rADF;
 		secondaryScatter += exp(-(rse1*(outer-r2)*rextinction + mse2*(r2-1.0)*mextinction)) * (rc * re2 + mc * me2) * (outer-r2);
+		*/
 
 		//secondaryScatter = rc * re2 * (0.1/rADF) * 4*PI * (1.0 + rc * re2 * (0.1/rADF) * 4*PI * (1.0 + rc * re2 * (0.1/rADF) * 4*PI));
 	}
@@ -163,7 +168,7 @@ void main(void)
 		vec4 outAttenuation = exp(-(rViewAtmosInt*rextinction + mViewAtmosInt*mextinction));
 
 		float nDotVP = max(0.0, dot(vec4(tnorm,0.0), lightDir[i]));
-		total += lightIntensity[i] * inAttenuation * gl_Color * lightDiffuse[i] * (nDotVP + PI * secondaryScatter) * outAttenuation;
+		total += lightIntensity[i] * inAttenuation * gl_Color * lightDiffuse[i] * (nDotVP + (1.0/(2*PI)) * secondaryScatter) * outAttenuation;
 
 			// aerial perspective
 			// We use flat earth hypothesis to make the integral simple.
@@ -179,12 +184,47 @@ void main(void)
 			// Alternative to separating out the two particles: see
 			// Preetham-Shirley-Smits, where they use a cubic approximation to
 			// one of the exponentials hence allowing a by-parts analytic
-			// integral. They use a precomputed texture for skylight, though,
-			// which won't play nicely with eclipses. But then we're anyway
-			// going to need at some point a way to calculate the effect of
-			// eclipses on skylight. So maybe this precomputation (a kind of
-			// half-Bruneton) is very sensible. Hmm. But maybe we don't need
-			// to do it, actually.
+			// integral. They leave as a factor to be (pre)computed, however,
+			// the light scattered at a point at sea level in a particular
+			// direction - making the assumption that this scales with density
+			// as we go up. That's a reasonable assumption when we're viewing
+			// from the ground, less so when we're viewing from space, but
+			// perhaps we can get away with it.
+			//
+			// So what we need, for this and for the numerical integration in
+			// the sky shader, is a decent estimate for the secondary scatter
+			// at a given point, depending on height and sun-angle. If we
+			// follow PSS and use it just as a multiplicative factor here, we
+			// don't need to worry about it being a nice integrable function.
+			//
+			// Idea for a hacky solution to that: calculate proportion of
+			// sphere of some arbitrary radius like 1+rADF/5 which is visible
+			// from this position and lit, and pretend that the entire radial
+			// line passing through each such point is visible and lit;
+			// furthermore, pretend for attenuation-calculation purposes that
+			// the scattered light all comes to us from the point on this
+			// sphere radially above/below us (a systematic underestimate, but
+			// probably not significant). Hmm, no, this seems not to lead to
+			// pleasant calculations.
+			//
+			// Am I overcomplicating this? The intensity of secondary-scatter
+			// seems like it should be more-or-less constant with height, so
+			// perhaps rhackFactor is actually the right solution after all?
+			// Just need to have it and the phase function vary reasonably
+			// with wavelength, and multiply by the proportion of visible sky
+			// which is directly lit. Of course, rhackFactor isn't literally
+			// right - we do want the ground to get some secondary lighting
+			// too. So how about: main scatter uses rayleigh phase function,
+			// then we have a *constant* secondary lighting intensity with
+			// constant phase.
+			//
+			//
+			// Another issue: the flat-earth hypothesis does lead to
+			// noticeable under-attenuation when we view from space. One hack
+			// to try: scale by the ratio between the actual optical depth and
+			// the flat-earth optical depth. Alternative if we can get the
+			// branching working right: use the sky shader for the horizon
+			// from space.
 			float D = distance(a,b);
 			vec4 rInScatter = vec4(0.0);
 			vec4 mInScatter = vec4(0.0);
@@ -192,7 +232,7 @@ void main(void)
 				vec4 sumext = rextinction*re1 + mextinction*me1;
 				//vec4 I = exp(-(rext*rs[i] + mext*ms[i])) * (1.0 - exp(-(rext+mext)*D)) / (rext+mext);
 				vec4 I = inAttenuation * (1.0 - exp(-sumext*D)) / sumext;
-				rInScatter = rc * re1 * I * 5.0;
+				rInScatter = rc * re1 * I;
 				mInScatter = mc * me1 * I;
 			} else {
 				const int N=6;
@@ -207,7 +247,7 @@ void main(void)
 				for (int j=0; j<N+1; j++) {
 					float simpson = (j==0||j==N) ? 1.0 : (j == j/2*2) ? 2.0 : 4.0;
 					vec4 atten = exp(-(reh * rfac + meh * mfac));
-					rInScatter += simpson * atten * rc*reh * 5.0;
+					rInScatter += simpson * atten * rc*reh;
 					mInScatter += simpson * atten * mc*meh;
 					reh *= rstep;
 					meh *= mstep;
@@ -217,15 +257,18 @@ void main(void)
 				mInScatter *= dsbydh * atten0 * Dh/3.0;
 			}
 
-			const float rPhase = 1.0/(4.0*PI);
+			float mu = dot(eyedir, vec3(lightDir[i]));
+
+			float rPhase = (1.0+mu*mu) * (3.0/(16.0*PI));
 			const float rhackFactor = 1.0; // <--- XXX HACK XXX
 			total += rhackFactor * PI * lightIntensity[i] * lightDiffuse[i] * rInScatter * rPhase;
 
 			// taken from Bruneton (loc. cit.):
-			float mu = dot(eyedir, vec3(lightDir[i]));
 			float mPhase = (3.0/(8.0*PI)) * ( (1.0-g*g)*(1.0+mu*mu) ) / ( (2.0+g*g)*pow(1.0+g*g-2.0*g*mu, 1.5));
 			const float mhackFactor = 1.0; // <--- XXX HACK XXX
 			total += mhackFactor * PI * lightIntensity[i] * lightDiffuse[i] * mInScatter * mPhase;
+
+			total += PI * secondaryScatter * lightIntensity[i] * lightDiffuse[i] * (rInScatter+mInScatter) * constantPhase;
 	//}
 	
 
