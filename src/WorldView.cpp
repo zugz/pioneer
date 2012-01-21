@@ -170,6 +170,7 @@ void WorldView::InitObject()
 	m_frontCamera = new Camera(Pi::player, Pi::GetScrWidth(), Pi::GetScrHeight());
 	m_rearCamera = new Camera(Pi::player, Pi::GetScrWidth(), Pi::GetScrHeight());
 	m_externalCamera = new Camera(Pi::player, Pi::GetScrWidth(), Pi::GetScrHeight());
+	m_evaCamera = new Camera(Pi::player->EVABody, Pi::GetScrWidth(), Pi::GetScrHeight());
 
 	m_rearCamera->SetOrientation(matrix4x4d::RotateYMatrix(M_PI));
 	
@@ -195,6 +196,7 @@ WorldView::~WorldView()
 	delete m_frontCamera;
 	delete m_rearCamera;
 	delete m_externalCamera;
+	delete m_evaCamera;
 
 	m_onHyperspaceTargetChangedCon.disconnect();
 	m_onPlayerEquipmentChangeCon.disconnect();
@@ -749,13 +751,20 @@ void WorldView::Update()
 	}
 
 	if (GetCamType() == CAM_EXTERNAL) {
-		m_externalCamera->SetPosition(GetExternalViewTranslation());
-		m_externalCamera->SetOrientation(GetExternalViewRotation());
+	    if (Pi::player->EVA)
+		{
+			//m_evaCamera->SetPosition(vector3d(0,1,10));
+		}
+		else {
+			m_externalCamera->SetPosition(GetExternalViewTranslation());
+			m_externalCamera->SetOrientation(GetExternalViewRotation());
+		}
 	}
 
 	m_activeCamera =
 		GetCamType() == CAM_FRONT ? m_frontCamera :
 		GetCamType() == CAM_REAR  ? m_rearCamera  :
+		Pi::player->EVA ?	    m_evaCamera :
 		                            m_externalCamera;
 
 	m_activeCamera->Update();

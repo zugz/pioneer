@@ -134,7 +134,7 @@ private:
 	Gui::LabelSet *m_bodyLabels;
 	std::map<Body*,vector3d> m_projectedPos;
 
-	Camera *m_frontCamera, *m_rearCamera, *m_externalCamera;
+	Camera *m_frontCamera, *m_rearCamera, *m_externalCamera, *m_evaCamera;
 	Camera *m_activeCamera;
 
 	Indicator m_velIndicator;

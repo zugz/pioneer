@@ -812,6 +812,11 @@ void Pi::HandleEvents()
 							}
 							break;
 						}
+						case SDLK_e: // EVA
+						{
+							player->ToggleEVA();
+							break;
+						}
 						default:
 							break; // This does nothing but it stops the compiler warnings
 					}
