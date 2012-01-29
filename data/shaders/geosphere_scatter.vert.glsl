@@ -176,12 +176,12 @@ void main(void)
 		if (j<N) rScatAtmosInt += re * len / 2.0;
 		if (j<N) mScatAtmosInt += me * len / 2.0;
 
-		vec4 d = y*lenInvSq + sqrt((1.0-lenInvSq)*(1.0-(y*y*lenInvSq)));
-		vec4 lightIntensity = clamp(d / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0);
+		vec4 ld = y*lenInvSq + sqrt(max(0.0,(1.0-lenInvSq)*(1.0-(y*y*lenInvSq))));
+		vec4 lightIntensity = clamp(ld / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0);
 
 		vec4 secondaryLightIntensity = 0.0;
 		const float secMaxDist = 5.0/rADF;
-		secondaryLightIntensity = clamp(d / (2.0*(lightDiscRadii+secMaxDist)) + 0.5, 0.0, 1.0);
+		secondaryLightIntensity = clamp(ld / (2.0*(lightDiscRadii+secMaxDist)) + 0.5, 0.0, 1.0);
 
 		if (occultedLight == 0) {
 			float dist = length(p - occultCentre - y[0]*lightDir[0] );

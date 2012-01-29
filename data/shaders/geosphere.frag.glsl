@@ -135,7 +135,7 @@ void main(void)
 	// sphere whose tangent plane contains b, is in the plane of lightDir[i] and
 	// b, and is towards the light from b.
 	float lenInvSq = 1.0/dot(b,b);
-	vec4 d = ly*lenInvSq + sqrt((1.0-lenInvSq)*(1.0-(ly*ly*lenInvSq)));
+	vec4 d = ly*lenInvSq + sqrt(max(0.0,(1.0-lenInvSq)*(1.0-(ly*ly*lenInvSq))));
 	vec4 lightIntensity = clamp(d / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0);
 
 	vec4 secondaryScatter = vec4(0.0);
