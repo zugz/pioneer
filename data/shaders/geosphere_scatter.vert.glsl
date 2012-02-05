@@ -43,6 +43,9 @@ void sphereEntryExitDist(out float near, out float far, in vec3 sphereCenter, in
 	}
 }
 
+
+// FIXME: check what happens when geosphereScale > 1
+
 void main(void)
 {
 #ifdef ZHACK
@@ -140,10 +143,10 @@ void main(void)
 #endif
 	vec4 d = (b-a)/float(N);
 	float len = length(d);
-
+	vec4 p = a;
 	for (int j=0; j<N+1; j++) {
 		float simpson = (j==0||j==N) ? 1.0 : (j == j/2*2) ? 2.0 : 4.0;
-		vec4 p = a+float(j)*d;
+		p += d;
 		float r = length(p);
 #ifndef GROUND
 		if (r < 1.0)
@@ -153,7 +156,7 @@ void main(void)
 		float re = exp(-rADF*(r-1.0));
 		float me = exp(-mADF*(r-1.0));
 
-		float lenInvSq = 1.0/dot(p,p);
+		float lenInvSq = 1.0/(r*r);
 
 		vec4 y = p * lightDir;
 		vec4 z = vec4(1.0) - abs(y)/vec4(r);
@@ -176,13 +179,14 @@ void main(void)
 		if (j<N) rScatAtmosInt += re * len / 2.0;
 		if (j<N) mScatAtmosInt += me * len / 2.0;
 
-		vec4 ld = y*lenInvSq + sqrt(max(0.0,(1.0-lenInvSq)*(1.0-(y*y*lenInvSq))));
-		vec4 lightIntensity = clamp(ld / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0);
+		vec4 ld = y*lenInvSq + sqrt(max(vec4(0.00001),(1.0-lenInvSq)*(vec4(1.0)-(y*y*lenInvSq))));
+		vec4 lightIntensity = clamp(ld / (2.0*lightDiscRadii) + 0.5, vec4(0.0), vec4(1.0));
 
-		vec4 secondaryLightIntensity = 0.0;
+		vec4 secondaryLightIntensity = vec4(1.0);
 		const float secMaxDist = 5.0/rADF;
-		secondaryLightIntensity = clamp(ld / (2.0*(lightDiscRadii+secMaxDist)) + 0.5, 0.0, 1.0);
+		//secondaryLightIntensity = clamp(ld / (2.0*(lightDiscRadii+secMaxDist)) + 0.5, 0.0, 1.0);
 
+		/*
 		if (occultedLight == 0) {
 			float dist = length(p - occultCentre - y[0]*lightDir[0] );
 			lightIntensity[0] *= (1.0 - mix(0.0, maxOcclusion,
@@ -211,6 +215,7 @@ void main(void)
 				secondaryLightIntensity[3] *= (1.0 - mix(0.0, maxOcclusion,
 							clamp( ( trad-dist + secMaxDist ) / ( trad-absdiff + 2.0*secMaxDist ), 0.0, 1.0)));
 		}
+		*/
 
 		mat4 rScatter;
 		mat4 mScatter;
@@ -238,7 +243,46 @@ void main(void)
 			// depth, with scattering path being of optical depth that of
 			// direct light to the point.
 			secondaryScatter = 4.0*PI*rc * 2.0/rADF * exp(-rextinction*1.0/rADF);
-			
+
+			// Consider the cone formed from line segments starting at p,
+			// passing tangent to the planet, and ending at the "edge of the
+			// atmosphere" (which we arbitrarily consider to be at radius
+			// 1+3/rADF). The proportion of this cone which is unshadowed
+			// is a decent estimate for the secondary scatter p is receiving,
+			// as a proportion of that it does in full uneclipsed daylight.
+			//
+			// For shadowing by the planet, we estimate the unshadowed
+			// proportion of the cone by the unshadowed proportion of its
+			// bounding circle:
+
+#ifdef GROUND
+			r *= 1.0+1.0/rADF;
+			y *= 1.0+1.0/rADF;
+#endif
+			const float atmoRad = 1.0 + 3.0/rADF;
+			float r0;
+			if (r < 1.00001) r0 = 1.0;
+			else r0 = r - (r-1.0/r)*(sqrt((atmoRad*atmoRad-1.0)/(r*r-1.0))+1.0);
+			float atmoHorizonRad = sqrt(atmoRad*atmoRad - r0*r0);
+
+			vec4 sinphi = y/r;
+			vec4 cosphi = sqrt(1.0-sinphi*sinphi);
+			vec4 s0 = cosphi*r0;
+			vec4 posUnshadowed = vec4(greaterThan(sinphi*r0 - atmoHorizonRad*cosphi, vec4(0.0)));
+			vec4 negUnshadowed = vec4(greaterThan(sinphi*r0 + atmoHorizonRad*cosphi, vec4(0.0)));
+
+			// quadratic in cos(\theta) - in shadow cylinder of the planet iff
+			// (atmoHorizonRad*sin(\theta))^2 + (s0 + atmoHorizonRad*cos(\theta)*sin(\phi))^2 <= 1
+			vec4 A2 = max(0.0001, 2.0*vec4(atmoHorizonRad*atmoHorizonRad)*(vec4(1.0)-sinphi*sinphi));
+			vec4 B = -2.0*vec4(atmoHorizonRad)*s0*sinphi;
+			vec4 C2 = 2.0*(vec4(1.0) - vec4(atmoHorizonRad*atmoHorizonRad)+s0*s0);
+
+			vec4 rootdet = sqrt(max(vec4(0.0), B*B - A2*C2));
+
+			vec4 theta1 = acos(mix(clamp((-B+rootdet)/A2,-1.0,1.0), 1.0, posUnshadowed));
+			vec4 theta2 = acos(mix(clamp((-B-rootdet)/A2,-1.0,1.0), -1.0, negUnshadowed));
+			secondaryLightIntensity *= (theta2-theta1)/PI;
+
 			/*
 			// XXX: Entirely ad hoc secondary scatter: split into two components, from below and
 			// from above, and in each case just integrate along a line, using density 1/ADF away as
@@ -260,15 +304,17 @@ void main(void)
 			*/
 
 			extraIn += simpson * (len/3.0) * (re * rc + me * mc) * PI * constantPhase * secondaryScatter * (matrixCompMult(attenuation, lightDiffuse) * secondaryLightIntensity);
+			// extraIn += simpson * (len/3.0) * (re * rc + me * mc) * PI * constantPhase * secondaryScatter * secondaryLightIntensity[0];
 		}
 
 #ifdef GROUND
 		if (j==N) {
-			vec4 direct = lightIntensity * max(0.0, vec4(normalize(gl_NormalMatrix * gl_Normal),0.0) * lightDir);
-			extraIn += gl_Color * (direct[0] + secondaryLightIntensity[0] * PI * (1.0/(2*PI)) * secondaryScatter) * attenuation[0] * lightDiffuse[0];
-			extraIn += gl_Color * (direct[1] + secondaryLightIntensity[1] * PI * (1.0/(2*PI)) * secondaryScatter) * attenuation[1] * lightDiffuse[1];
-			extraIn += gl_Color * (direct[2] + secondaryLightIntensity[2] * PI * (1.0/(2*PI)) * secondaryScatter) * attenuation[2] * lightDiffuse[2];
-			extraIn += gl_Color * (direct[3] + secondaryLightIntensity[3] * PI * (1.0/(2*PI)) * secondaryScatter) * attenuation[3] * lightDiffuse[3];
+			vec4 direct = lightIntensity * max(vec4(0.0), vec4(normalize(gl_NormalMatrix * gl_Normal),0.0) * lightDir);
+			//extraIn += gl_Color * (direct[0] + secondaryLightIntensity[0] * PI * (1.0/(2.0*PI)) * secondaryScatter) * lightDiffuse[0];
+			extraIn += gl_Color * (direct[0] + secondaryLightIntensity[0] * PI * (1.0/(2.0*PI)) * secondaryScatter) * attenuation[0] * lightDiffuse[0];
+			extraIn += gl_Color * (direct[1] + secondaryLightIntensity[1] * PI * (1.0/(2.0*PI)) * secondaryScatter) * attenuation[1] * lightDiffuse[1];
+			extraIn += gl_Color * (direct[2] + secondaryLightIntensity[2] * PI * (1.0/(2.0*PI)) * secondaryScatter) * attenuation[2] * lightDiffuse[2];
+			extraIn += gl_Color * (direct[3] + secondaryLightIntensity[3] * PI * (1.0/(2.0*PI)) * secondaryScatter) * attenuation[3] * lightDiffuse[3];
 		}
 #endif
 	}

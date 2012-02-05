@@ -135,26 +135,54 @@ void main(void)
 	// sphere whose tangent plane contains b, is in the plane of lightDir[i] and
 	// b, and is towards the light from b.
 	float lenInvSq = 1.0/dot(b,b);
-	vec4 d = ly*lenInvSq + sqrt(max(0.0,(1.0-lenInvSq)*(1.0-(ly*ly*lenInvSq))));
+	vec4 d = ly*lenInvSq + sqrt(max(vec4(0.00001),(1.0-lenInvSq)*(1.0-(ly*ly*lenInvSq))));
 	vec4 lightIntensity = clamp(d / (2.0*lightDiscRadii) + 0.5, 0.0, 1.0);
 
 	vec4 secondaryScatter = vec4(0.0);
+	vec4 secondaryLightIntensity = vec4(1.0);
 	if (useSecondary == 1)
 	{
 		secondaryScatter = 4.0*PI * rc * 2.0/rADF * exp(-rextinction*1.0/rADF);
 		/*
-		float samp1 = max(0.0,r2-1.0/rADF-1.0);
-		float samp2 = r2+1.0/rADF-1.0;
-		float rse1 = exp(-(rADF*samp1));
-		float rse2 = exp(-(rADF*samp2));
-		float mse1 = exp(-(mADF*samp1));
-		float mse2 = exp(-(mADF*samp2));
-		secondaryScatter += exp(-(rse1*(r2-1)*rextinction + mse1*(r2-1)*mextinction)) * (rc * re2 + mc * me2) * (r2-1.0);
-		float outer = 1.0 + 6.0/rADF;
-		secondaryScatter += exp(-(rse1*(outer-r2)*rextinction + mse2*(r2-1.0)*mextinction)) * (rc * re2 + mc * me2) * (outer-r2);
-		*/
+		   float samp1 = max(0.0,r2-1.0/rADF-1.0);
+		   float samp2 = r2+1.0/rADF-1.0;
+		   float rse1 = exp(-(rADF*samp1));
+		   float rse2 = exp(-(rADF*samp2));
+		   float mse1 = exp(-(mADF*samp1));
+		   float mse2 = exp(-(mADF*samp2));
+		   secondaryScatter += exp(-(rse1*(r2-1)*rextinction + mse1*(r2-1)*mextinction)) * (rc * re2 + mc * me2) * (r2-1.0);
+		   float outer = 1.0 + 6.0/rADF;
+		   secondaryScatter += exp(-(rse1*(outer-r2)*rextinction + mse2*(r2-1.0)*mextinction)) * (rc * re2 + mc * me2) * (outer-r2);
+		   */
 
 		//secondaryScatter = rc * re2 * (0.1/rADF) * 4*PI * (1.0 + rc * re2 * (0.1/rADF) * 4*PI * (1.0 + rc * re2 * (0.1/rADF) * 4*PI));
+
+		float r = r2 + 1.0/rADF;
+		vec4 y = ly;
+
+		const float atmoRad = 1.0 + 3.0/rADF;
+		float r0;
+		if (r < 1.00001) r0 = 1.0;
+		else r0 = r - (r-1.0/r)*(sqrt((atmoRad*atmoRad-1.0)/(r*r-1.0))+1.0);
+		float atmoHorizonRad = sqrt(atmoRad*atmoRad - r0*r0);
+
+		vec4 sinphi = y/r;
+		vec4 cosphi = sqrt(1.0-sinphi*sinphi);
+		vec4 s0 = cosphi*r0;
+		vec4 posUnshadowed = vec4(greaterThan(sinphi*r0 - atmoHorizonRad*cosphi, vec4(0.0)));
+		vec4 negUnshadowed = vec4(greaterThan(sinphi*r0 + atmoHorizonRad*cosphi, vec4(0.0)));
+
+		// quadratic in cos(\theta) - in shadow cylinder of the planet iff
+		// (atmoHorizonRad*sin(\theta))^2 + (s0 + atmoHorizonRad*cos(\theta)*sin(\phi))^2 <= 1
+		vec4 A2 = max(vec4(0.0001), 2.0*vec4(atmoHorizonRad*atmoHorizonRad)*(vec4(1.0)-sinphi*sinphi));
+		vec4 B = -2.0*vec4(atmoHorizonRad)*s0*sinphi;
+		vec4 C2 = 2.0*(vec4(1.0) - vec4(atmoHorizonRad*atmoHorizonRad)+s0*s0);
+
+		vec4 rootdet = sqrt(max(vec4(0.0), B*B - A2*C2));
+
+		vec4 theta1 = acos(mix(clamp((-B+rootdet)/A2,-1.0,1.0), vec4(1.0), posUnshadowed));
+		vec4 theta2 = acos(mix(clamp((-B-rootdet)/A2,-1.0,1.0), vec4(-1.0), negUnshadowed));
+		secondaryLightIntensity *= (theta2-theta1)/PI;
 	}
 
 	//for (int i=0; i<NUM_LIGHTS; ++i) {
@@ -168,7 +196,10 @@ void main(void)
 		vec4 outAttenuation = exp(-(rViewAtmosInt*rextinction + mViewAtmosInt*mextinction));
 
 		float nDotVP = max(0.0, dot(vec4(tnorm,0.0), lightDir[i]));
-		total += lightIntensity[i] * inAttenuation * gl_Color * lightDiffuse[i] * (nDotVP + (1.0/(2*PI)) * secondaryScatter) * outAttenuation;
+		total += inAttenuation * gl_Color * lightDiffuse[i] *
+			(lightIntensity[i] * nDotVP +
+			 secondaryLightIntensity[i] * PI * (1.0/(2.0*PI)) * secondaryScatter)
+			* outAttenuation;
 
 			// aerial perspective
 			// We use flat earth hypothesis to make the integral simple.
@@ -191,34 +222,6 @@ void main(void)
 			// from the ground, less so when we're viewing from space, but
 			// perhaps we can get away with it.
 			//
-			// So what we need, for this and for the numerical integration in
-			// the sky shader, is a decent estimate for the secondary scatter
-			// at a given point, depending on height and sun-angle. If we
-			// follow PSS and use it just as a multiplicative factor here, we
-			// don't need to worry about it being a nice integrable function.
-			//
-			// Idea for a hacky solution to that: calculate proportion of
-			// sphere of some arbitrary radius like 1+rADF/5 which is visible
-			// from this position and lit, and pretend that the entire radial
-			// line passing through each such point is visible and lit;
-			// furthermore, pretend for attenuation-calculation purposes that
-			// the scattered light all comes to us from the point on this
-			// sphere radially above/below us (a systematic underestimate, but
-			// probably not significant). Hmm, no, this seems not to lead to
-			// pleasant calculations.
-			//
-			// Am I overcomplicating this? The intensity of secondary-scatter
-			// seems like it should be more-or-less constant with height, so
-			// perhaps rhackFactor is actually the right solution after all?
-			// Just need to have it and the phase function vary reasonably
-			// with wavelength, and multiply by the proportion of visible sky
-			// which is directly lit. Of course, rhackFactor isn't literally
-			// right - we do want the ground to get some secondary lighting
-			// too. So how about: main scatter uses rayleigh phase function,
-			// then we have a *constant* secondary lighting intensity with
-			// constant phase.
-			//
-			//
 			// Another issue: the flat-earth hypothesis does lead to
 			// noticeable under-attenuation when we view from space. One hack
 			// to try: scale by the ratio between the actual optical depth and
@@ -228,7 +231,7 @@ void main(void)
 			float D = distance(a,b);
 			vec4 rInScatter = vec4(0.0);
 			vec4 mInScatter = vec4(0.0);
-			if (abs(r2-r1) < 0.05/rADF) {
+			if (abs(r2-r1) < 0.0001) {
 				vec4 sumext = rextinction*re1 + mextinction*me1;
 				//vec4 I = exp(-(rext*rs[i] + mext*ms[i])) * (1.0 - exp(-(rext+mext)*D)) / (rext+mext);
 				vec4 I = inAttenuation * (1.0 - exp(-sumext*D)) / sumext;
@@ -253,8 +256,8 @@ void main(void)
 					meh *= mstep;
 				}
 				vec4 atten0 = exp(-dsbydh * (re1 * rextinction / rADF + me1 * mextinction / mADF));
-				rInScatter *= dsbydh * atten0 * Dh/3.0;
-				mInScatter *= dsbydh * atten0 * Dh/3.0;
+				rInScatter *= inAttenuation * atten0 * D/(3.0*float(N));
+				mInScatter *= inAttenuation * atten0 * D/(3.0*float(N));
 			}
 
 			float mu = dot(eyedir, vec3(lightDir[i]));
@@ -268,7 +271,7 @@ void main(void)
 			const float mhackFactor = 1.0; // <--- XXX HACK XXX
 			total += mhackFactor * PI * lightIntensity[i] * lightDiffuse[i] * mInScatter * mPhase;
 
-			total += PI * secondaryScatter * lightIntensity[i] * lightDiffuse[i] * (rInScatter+mInScatter) * constantPhase;
+			total += PI * secondaryScatter*secondaryLightIntensity[i] * lightDiffuse[i] * (rInScatter+mInScatter) * constantPhase;
 	//}
 	
 
