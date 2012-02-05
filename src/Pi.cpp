@@ -705,6 +705,12 @@ void Pi::HandleEvents()
 						case SDLK_g:
 							Pi::surfaceScatteringShader = !Pi::surfaceScatteringShader;
 							break;
+						case SDLK_r:
+							{
+								const GeoSphere *g = static_cast<TerrainBody*>(Pi::player->GetFrame()->GetBodyFor())->GetGeoSphere();
+								g->ReinitShaders();
+							}
+							break;
 						case SDLK_m:  // Gimme money!
 							if(Pi::game) {
 								Pi::player->SetMoney(Pi::player->GetMoney() + 10000000);

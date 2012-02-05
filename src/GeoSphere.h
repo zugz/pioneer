@@ -39,6 +39,7 @@ public:
 	friend class GeoPatch;
 	static void Init();
 	static void Uninit();
+	static void ReinitShaders();
 	static void OnChangeDetailLevel();
 	// in sbody radii
 	double GetMaxFeatureHeight() const { return m_terrain->GetMaxHeight(); }
