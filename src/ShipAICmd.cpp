@@ -204,23 +204,27 @@ bool AICmdKamikaze::TimeStepUpdate()
 	else { LaunchShip(m_ship); return false; }
 
 	m_ship->SetGunState(0,0);
-	// needs to deal with frames, large distances, and success
-	if (m_ship->GetFrame() == m_target->GetFrame()) {
-		double dist = (m_target->GetPosition() - m_ship->GetPosition()).Length();
-		vector3d vRel = m_ship->GetVelocityRelTo(m_target);
-		vector3d dir = (m_target->GetPosition() - m_ship->GetPosition()).Normalized();
 
-		const double eta = std::min(dist / std::max(vRel.Dot(dir), 0.1), 10.0);
-		const vector3d enemyProjectedPos = m_target->GetPosition() + eta*m_target->GetVelocity() - eta*m_ship->GetVelocity();
-		dir = (enemyProjectedPos - m_ship->GetPosition()).Normalized();
+	const vector3d targetPos = m_target->GetPositionRelTo(m_ship);
+	const vector3d targetDir = targetPos.NormalizedSafe();
+	const double dist = targetPos.Length();
 
-		m_ship->ClearThrusterState();
-		m_ship->AIFaceDirection(dir);
+	// don't come in too fast when we're close, so we're better able to
+	// compensate for evasive maneouvers. Aim to use 1/4 of our acceleration
+	// for braking, leaving the rest for course adjustment.
+	static const double aimCollisionSpeed = 200;
+	const double brake = m_ship->GetAccelFwd()/4;
+	const double aimRelSpeed =
+		sqrt(aimedCollisionSpeed*aimedCollisionSpeed + 2*dist*brake);
 
-		// thunder at target at 400m/sec
-		// todo: fix that static cast - redo this function anyway
-		m_ship->AIModelCoordsMatchSpeedRelTo(vector3d(0,0,-400), static_cast<Ship*>(m_target));
-	}
+	const vector3d aimVel = aimRelSpeed*targetDir + m_target->GetVelocityRelTo(m_ship->GetFrame());
+	const vector3d accelDir = (aimVel - m_ship->GetVelocity()).NormalizedSafe();
+
+	m_ship->ClearThrusterState();
+	m_ship->AIFaceDirection(accelDir);
+
+	m_ship->AIAccelToModelRelativeVelocity(aimVel * m_ship->GetOrient());
+
 	return false;
 }
 
