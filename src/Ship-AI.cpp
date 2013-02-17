@@ -319,6 +319,9 @@ vector3d Ship::AIGetLeadDir(const Body *target, const vector3d& targaccel, int g
 	vector3d targvel = target->GetVelocityRelTo(this);
 	// todo: should adjust targpos for gunmount offset
 
+	return targpos.Normalized();
+
+	/*
 	int laser = Equip::types[m_equipment.Get(Equip::SLOT_LASER, gunindex)].tableIndex;
 	double projspeed = Equip::lasers[laser].speed;
 
@@ -331,6 +334,7 @@ vector3d Ship::AIGetLeadDir(const Body *target, const vector3d& targaccel, int g
 	leadpos = targpos + targvel*projtime + 0.5*targaccel*projtime*projtime;
 
 	return leadpos.Normalized();
+	*/
 }
 
 // underestimates if endspeed isn't reachable

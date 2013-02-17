@@ -215,7 +215,7 @@ bool AICmdKamikaze::TimeStepUpdate()
 	static const double aimCollisionSpeed = 200;
 	const double brake = m_ship->GetAccelFwd()/4;
 	const double aimRelSpeed =
-		sqrt(aimedCollisionSpeed*aimedCollisionSpeed + 2*dist*brake);
+		sqrt(aimCollisionSpeed*aimCollisionSpeed + 2*dist*brake);
 
 	const vector3d aimVel = aimRelSpeed*targetDir + m_target->GetVelocityRelTo(m_ship->GetFrame());
 	const vector3d accelDir = (aimVel - m_ship->GetVelocity()).NormalizedSafe();
