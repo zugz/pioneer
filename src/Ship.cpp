@@ -22,6 +22,7 @@
 #include "graphics/Material.h"
 #include "graphics/Renderer.h"
 #include "graphics/TextureBuilder.h"
+#include "collider/CollisionSpace.h"
 #include "StringF.h"
 
 #define TONS_HULL_PER_SHIELD 10.0f
@@ -772,6 +773,7 @@ void Ship::FireWeapon(int num)
 	vector3d baseVel = GetVelocity();
 	vector3d dirVel = lt.speed * dir.Normalized();
 
+	/*
 	if (lt.flags & Equip::LASER_DUAL)
 	{
 		const ShipType::DualLaserOrientation orient = stype.gunMount[num].orient;
@@ -784,16 +786,15 @@ void Ship::FireWeapon(int num)
 	}
 	else
 		Projectile::Add(this, t, pos, baseVel, dirVel);
-
-	/*
-			// trace laser beam through frame to see who it hits
-			CollisionContact c;
-			GetFrame()->GetCollisionSpace()->TraceRay(pos, dir, 10000.0, &c, this->GetGeom());
-			if (c.userData1) {
-				Body *hit = static_cast<Body*>(c.userData1);
-				hit->OnDamage(this, damage);
-			}
 	*/
+
+	// trace laser beam through frame to see who it hits
+	CollisionContact c;
+	GetFrame()->GetCollisionSpace()->TraceRay(pos, dir, 10000.0, &c, this->GetGeom());
+	if (c.userData1) {
+		Body *hit = static_cast<Body*>(c.userData1);
+		hit->OnDamage(this, lt.damage);
+	}
 
 	Polit::NotifyOfCrime(this, Polit::CRIME_WEAPON_DISCHARGE);
 	Sound::BodyMakeNoise(this, "Pulse_Laser", 1.0f);
