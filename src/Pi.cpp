@@ -676,14 +676,15 @@ void Pi::HandleEvents()
 											printf("Select a space station...\n");
 									}
 								} else {
-									Ship *ship = new Ship(ShipType::POLICE);
+									//Ship *ship = new Ship(ShipType::POLICE);
+									Ship *ship = new Ship("eagle_lrf");
 									ship->AIKill(Pi::player);
 									ship->m_equipment.Set(Equip::SLOT_LASER, 0, Equip::PULSECANNON_DUAL_1MW);
 									ship->m_equipment.Add(Equip::LASER_COOLING_BOOSTER);
 									ship->m_equipment.Add(Equip::ATMOSPHERIC_SHIELDING);
 									ship->SetFrame(Pi::player->GetFrame());
-									ship->SetPosition(Pi::player->GetPosition()+100.0*dir);
-									ship->SetVelocity(Pi::player->GetVelocity());
+									ship->SetPosition(Pi::player->GetPosition()+1000.0*dir);
+									ship->SetVelocity(Pi::player->GetVelocity()+200.0*dir);
 									ship->UpdateStats();
 									game->GetSpace()->AddBody(ship);
 								}
