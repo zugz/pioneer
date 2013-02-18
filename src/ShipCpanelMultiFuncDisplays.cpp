@@ -178,11 +178,11 @@ void ScannerWidget::Draw()
 		m_lastRange = m_currentRange;
 	}
 
+	m_renderer->SetBlendMode(BLEND_ALPHA);
 	// draw objects below player (and below scanner)
 	if (!m_contacts.empty()) DrawBlobs(true);
 
 	// disc
-	m_renderer->SetBlendMode(BLEND_ALPHA);
 	Color green(0.f, 1.f, 0.f, 0.1f);
 
 	// XXX 2d vertices
@@ -234,6 +234,7 @@ void ScannerWidget::Update()
 		Contact c;
 		c.type = (*i)->GetType();
 		c.pos = (*i)->GetPositionRelTo(Pi::player);
+		c.vel = (*i)->GetVelocityRelTo(Pi::player);
 		c.isSpecial = false;
 
 		switch ((*i)->GetType()) {
@@ -410,6 +411,27 @@ void ScannerWidget::DrawBlobs(bool below)
 
 		vector3f blob(x, y_blob, 0.f);
 		m_renderer->DrawPoints(1, &blob, color, pointSize);
+
+		vector3d tpos = (i->pos + i->vel) * Pi::player->GetOrient();
+		float tx = m_x + m_x * float(tpos.x) * m_scale;
+		float ty_base = m_y + m_y * SCANNER_YSHRINK * float(tpos.z) * m_scale;
+		float ty_blob = ty_base - m_y * SCANNER_YSHRINK * float(tpos.y) * m_scale;
+
+		VertexArray va(ATTRIB_POSITION | ATTRIB_DIFFUSE, 128); //reserve some space for positions & colors
+		Color flagColor(color->r, color->g, color->b, 0.4f);
+		va.Add(vector3f(x, y_base, 0.f), flagColor);
+		va.Add(vector3f(x, y_blob, 0.f), flagColor);
+		va.Add(vector3f(tx, ty_blob, 0.f), flagColor);
+		va.Add(vector3f(tx, ty_base, 0.f), flagColor);
+		m_renderer->DrawTriangles(&va, Graphics::vtxColorMaterial, TRIANGLE_FAN);
+		// Do it again the other way round! XXX: yes, this is
+		// ridiculous.
+		va = VertexArray(ATTRIB_POSITION | ATTRIB_DIFFUSE, 128);
+		va.Add(vector3f(tx, ty_base, 0.f), flagColor);
+		va.Add(vector3f(tx, ty_blob, 0.f), flagColor);
+		va.Add(vector3f(x, y_blob, 0.f), flagColor);
+		va.Add(vector3f(x, y_base, 0.f), flagColor);
+		m_renderer->DrawTriangles(&va, Graphics::vtxColorMaterial, TRIANGLE_FAN);
 	}
 }
 

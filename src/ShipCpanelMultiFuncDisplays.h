@@ -84,6 +84,7 @@ private:
 	struct Contact {
 		Object::Type type;
 		vector3d pos;
+		vector3d vel;
 		bool isSpecial;
 	};
 	std::list<Contact> m_contacts;
