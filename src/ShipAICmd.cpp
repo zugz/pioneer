@@ -236,6 +236,8 @@ bool AICmdKill::TimeStepUpdate()
 	if (m_ship->GetFlightState() == Ship::FLYING) m_ship->SetWheelState(false);
 	else { LaunchShip(m_ship); return false; }
 
+	const double laserDist = 1000;
+
 	const matrix3x3d &rot = m_ship->GetOrient();
 	const ShipType &stype = m_ship->GetShipType();
 	vector3d targpos = m_target->GetPositionRelTo(m_ship);
@@ -276,7 +278,7 @@ bool AICmdKill::TimeStepUpdate()
 		vissize += (0.05 + 0.5*leaddiff)*Pi::rng.Double()*skillShoot;
 		if (vissize > headdiff) m_ship->SetGunState(0,1);
 		else m_ship->SetGunState(0,0);
-		if (targpos.LengthSqr() > 4000*4000) m_ship->SetGunState(0,0);		// temp
+		if (targpos.LengthSqr() > laserDist*laserDist) m_ship->SetGunState(0,0);		// temp
 	}
 	m_leadOffset += m_leadDrift * Pi::game->GetTimeStep();
 	double leadAV = (leaddir-targdir).Dot((leaddir-heading).NormalizedSafe());	// leaddir angvel

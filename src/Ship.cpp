@@ -788,11 +788,41 @@ void Ship::FireWeapon(int num)
 		Projectile::Add(this, t, pos, baseVel, dirVel);
 	*/
 
+	const double laserDist = 1000;
+
+	// Stupid targetting system: aim laser at whichever viable target is
+	// closest to centre, where 'viable' just means within range rather
+	// than necessarily being hostile!
+	Space::BodyNearList nearby;
+	Pi::game->GetSpace()->GetBodiesMaybeNear(this, laserDist, nearby);
+	double bestCosTheta = 0.985; // about 10 degrees is the minimum
+	vector3d laserDir = dir;
+
+	for (Space::BodyNearIterator i = nearby.begin(); i != nearby.end(); ++i) {
+	    if (*i == this) continue;
+	    const vector3d tpos = (*i)->GetPositionRelTo(this);
+	    if (tpos.Length() > laserDist) continue;
+	    const vector3d tdir = tpos.NormalizedSafe();
+	    // TODO: handle case that some of the target, though not its
+	    // centre, is in angular range
+	    const double cosTheta = tdir.Dot(dir.Normalized());
+	    if (cosTheta > bestCosTheta) {
+		bestCosTheta = cosTheta;
+		laserDir = tdir;
+	    }
+	}
+
 	// trace laser beam through frame to see who it hits
 	CollisionContact c;
-	GetFrame()->GetCollisionSpace()->TraceRay(pos, dir, 10000.0, &c, this->GetGeom());
+	GetFrame()->GetCollisionSpace()->TraceRay(pos, laserDir, laserDist, &c, this->GetGeom());
 	if (c.userData1) {
 		Body *hit = static_cast<Body*>(c.userData1);
+		//const double distsq = hit->GetPositionRelTo(this).LengthSqr();
+		// zero damage beyond maximum range, full damage within it.
+		// This isn't actually all that far from realistic - laser
+		// beams diverge asymptotically linearly, and then the target
+		// is soon going to be receiving only a small proportion of
+		// the energy.
 		hit->OnDamage(this, lt.damage);
 	}
 
